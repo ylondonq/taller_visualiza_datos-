@@ -215,12 +215,13 @@ with tab_resumen:
         "si se concretaran las compras?",
         "La respuesta es la misma categoría que ya sostiene el negocio.",
     )
+    # Tono semántico: rojo = dinero en riesgo (a actuar); verde = valor real/positivo; gris = neutro.
     kpis = [
-        ("Revenue en juego", f"{fmt_money_short(TOTAL_STAKE)} USD", "carritos abandonados", True),
-        ("Abandono de carrito", fmt_pct(k_ab["abandono_global"]), "de lo que llega al carrito", False),
-        ("Conversión por unidad", fmt_pct(k_ab["gf"]["conv_rate"], 2), "de lo visto se compra", False),
-        ("Recurrentes", fmt_pct(k_rec["pct_repeat"]), f"= {fmt_pct(k_rec['pct_rev_repeat'])} del revenue", False),
-        ("Decisión (mediana)", _min_txt(k_ds["median_min"]), "del 1er view a la compra", False),
+        ("Revenue en juego", f"{fmt_money_short(TOTAL_STAKE)} USD", "carritos abandonados", "red"),
+        ("Abandono de carrito", fmt_pct(k_ab["abandono_global"]), "de lo que llega al carrito", None),
+        ("Conversión por unidad", fmt_pct(k_ab["gf"]["conv_rate"], 2), "de lo visto se compra", None),
+        ("Recurrentes", fmt_pct(k_rec["pct_repeat"]), f"= {fmt_pct(k_rec['pct_rev_repeat'])} del revenue", "green"),
+        ("Decisión (mediana)", _min_txt(k_ds["median_min"]), "del 1er view a la compra", None),
     ]
     for col, (lbl, val, sub, acc) in zip(st.columns(5), kpis):
         col.markdown(ui.kpi_card(lbl, val, sub, acc), unsafe_allow_html=True)

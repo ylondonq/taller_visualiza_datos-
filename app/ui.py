@@ -84,10 +84,12 @@ header[data-testid="stHeader"] { background: transparent; height: 0; }
 
 /* Tarjeta KPI (jerarquía: ancla resaltada) */
 .ecsa-kpi { padding: 14px 16px; border: 1px solid __GRAY200__; border-radius: 12px; background: __SURFACE__; height: 100%; }
-.ecsa-kpi.accent { border-color: __RED__; border-top: 3px solid __RED__; background: __REDSOFT__; }
+.ecsa-kpi.accent-red { border-color: __RED__; border-top: 3px solid __RED__; background: __REDSOFT__; }
+.ecsa-kpi.accent-green { border-color: __GREEN__; border-top: 3px solid __GREEN__; background: __GREENSOFT__; }
 .ecsa-kpi .lbl { font-size: 12.5px; color: __GRAY600__; text-transform: uppercase; letter-spacing: .03em; }
 .ecsa-kpi .val { font-size: 26px; font-weight: 600; color: __GRAY900__; line-height: 1.25; margin-top: 2px; }
-.ecsa-kpi.accent .val { color: __RED__; }
+.ecsa-kpi.accent-red .val { color: __RED__; }
+.ecsa-kpi.accent-green .val { color: __GREEN__; }
 .ecsa-kpi .sub { font-size: 12.5px; color: __GRAY600__; margin-top: 2px; }
 
 /* Callout de número grande */
@@ -167,7 +169,8 @@ header[data-testid="stHeader"] { background: transparent; height: 0; }
 def _css():
     repl = {
         "__FONT__": theme.FONT_STACK, "__BG__": theme.BG, "__SURFACE__": theme.SURFACE,
-        "__RED__": theme.BRAND_RED, "__REDSOFT__": theme.RED_SOFT, "__GREEN__": theme.BRAND_GREEN,
+        "__RED__": theme.BRAND_RED, "__REDSOFT__": theme.RED_SOFT,
+        "__GREEN__": theme.BRAND_GREEN, "__GREENSOFT__": theme.GREEN_SOFT,
         "__GRAY900__": theme.GRAY_900, "__GRAY600__": theme.GRAY_600,
         "__GRAY200__": theme.GRAY_200, "__GRAY100__": theme.GRAY_100,
     }
@@ -208,8 +211,10 @@ def message_line(texto):
     st.markdown(f'<div class="ecsa-msg">{texto}</div>', unsafe_allow_html=True)
 
 
-def kpi_card(label, value, sub=None, accent=False):
-    cls = "ecsa-kpi accent" if accent else "ecsa-kpi"
+def kpi_card(label, value, sub=None, accent=None):
+    """Tarjeta KPI. accent: None/False (neutro gris), 'red'/True (riesgo) o 'green' (positivo)."""
+    tone = {True: "red", "red": "red", "green": "green"}.get(accent)
+    cls = f"ecsa-kpi accent-{tone}" if tone else "ecsa-kpi"
     subhtml = f'<div class="sub">{sub}</div>' if sub else ""
     return (f'<div class="{cls}"><div class="lbl">{label}</div>'
             f'<div class="val">{value}</div>{subhtml}</div>')
