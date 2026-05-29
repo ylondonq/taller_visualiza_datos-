@@ -65,7 +65,7 @@ def hero_revenue_at_stake(ras, foco="electronics"):
 
 
 # ── Héroe B (PN2): concentración de valor de los recurrentes ──────────────────
-def hero_retention(rec):
+def hero_retention(rec, title=None):
     """Dos barras 100% apiladas: el 31,7% de compradores (recurrentes) = 69% del revenue."""
     pct_rep = rec["pct_repeat"]
     pct_rev_rep = rec["pct_rev_repeat"]
@@ -87,7 +87,8 @@ def hero_retention(rec):
         hovertemplate="One-time: %{y:.1f}%<extra></extra>",
     )
     fig.update_layout(
-        barmode="stack", title="El mismo grupo: 1 de cada 3 compradores trae 7 de cada 10 dólares",
+        barmode="stack",
+        title=title or "El mismo grupo: 1 de cada 3 compradores trae 7 de cada 10 dólares",
         yaxis=dict(title="% del total", range=[0, 100], ticksuffix="%"),
         height=420, legend=dict(orientation="h", y=1.08, x=0),
     )
@@ -100,9 +101,12 @@ def hero_retention(rec):
 
 
 # ── Funnel por unidad (PN1) ───────────────────────────────────────────────────
-def funnel_chart(ab):
-    """Funnel por unidad (producto-en-sesión): vistas -> carrito -> compra."""
+def funnel_chart(ab, title=None, note=None):
+    """Funnel por unidad (producto-en-sesión): vistas -> carrito -> compra. La caída
+    carrito->compra (los carritos abandonados) se resalta en rojo y con anotación in-situ.
+    title: título-acción (verbo + cifra). note: subtítulo/anotación que traduce el hallazgo."""
     gf = ab["gf"]
+    abandono = 100 - gf["cart_to_purchase"]
     fig = theme.base_fig()
     fig.add_trace(go.Funnel(
         y=["Vista", "Llega al carrito", "Compra"],
@@ -112,9 +116,44 @@ def funnel_chart(ab):
         hovertemplate="%{y}: %{x:,} unidades<extra></extra>",
     ))
     fig.update_layout(
-        title=f"Funnel por unidad — solo el {fmt_pct(gf['conv_rate'], 2)} de lo visto se compra",
-        height=380, showlegend=False,
+        title=title or f"Funnel por unidad — solo el {fmt_pct(gf['conv_rate'], 2)} de lo visto se compra",
+        height=420, showlegend=False, margin=dict(l=10, r=20, t=60, b=64),
     )
+    # anotación dentro del gráfico: la fuga que importa (carrito -> compra), en rojo
+    fig.add_annotation(
+        x=0.97, y=0.5, xref="paper", yref="paper", xanchor="right", showarrow=False,
+        text=f"<b>{fmt_pct(abandono)}</b><br>llega al carrito<br>y no compra",
+        font=dict(color=BRAND_RED, size=13), align="right",
+    )
+    if note:
+        fig.add_annotation(
+            x=0.0, y=-0.18, xref="paper", yref="paper", xanchor="left", showarrow=False,
+            text=note, font=dict(color=GRAY_600, size=12.5), align="left",
+        )
+    return fig
+
+
+# ── Héroe intensidad horaria de un panel (PN3) ────────────────────────────────
+def hourly_intensity_hero(hi, title=None):
+    """Un solo panel: compras por 100 vistas por hora; el pico en rojo, resto gris.
+    Versión 'héroe' (limpia) del análisis horario; el detalle de 2 paneles va aparte."""
+    horas = list(hi.index)
+    peak_h = int(hi["compras_x100_vistas"].idxmax()) if len(hi) else 0
+    colors = [BRAND_RED if h == peak_h else CTX_BG for h in horas]
+    fig = theme.base_fig()
+    fig.add_bar(x=horas, y=hi["compras_x100_vistas"], marker_color=colors,
+                hovertemplate="%{x}h: %{y:.2f} compras/100 vistas<extra></extra>")
+    fig.update_layout(
+        title=title or f"La mañana decide: pico de intensidad a las {peak_h}h",
+        xaxis_title="Hora del día", yaxis_title="Compras por 100 vistas",
+        height=420, showlegend=False,
+    )
+    if len(hi):
+        fig.add_annotation(
+            x=peak_h, y=float(hi["compras_x100_vistas"].max()),
+            text="~2× la intensidad<br>de la tarde", showarrow=True, arrowhead=2,
+            arrowcolor=BRAND_RED, ax=45, ay=-28, font=dict(color=BRAND_RED, size=12), align="left",
+        )
     return fig
 
 

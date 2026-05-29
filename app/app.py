@@ -2,27 +2,26 @@
 app/app.py — Dashboard analítico E-commerce SA (Streamlit) · Taller 2.
 
 Mensaje central D2: "el negocio deja dinero sobre la mesa en electrónica", capturable en
-dos momentos — Palanca A (recuperar carritos abandonados, PN1) y Palanca B (retener al
-núcleo recurrente, PN2) — con PN3 (cuándo/con qué activar el incentivo).
+dos estrategias — Estrategia 1 (recuperar carritos abandonados, PN1) y Estrategia 2
+(retener al núcleo recurrente, PN2) — con PN3 (cuándo/con qué activar el incentivo).
 
-DISEÑO (rediseño BI estratégico, principios del curso):
-  · Marca + navegación prominente arriba (orientación del neófito, §4.3).
-  · Jerarquía HÉROE + SOPORTE por sección: una sola gráfica grande; el resto degradado o
-    tras revelación progresiva (§3.4 jerarquía + §3.1 Data-to-Ink; mata el "tablero de avión").
-  · Un único acento (rojo); contexto en grises (§3.2 preatentivos). Sin verde/azul decorativos.
-  · Ayudas NO-gráfico: banner de acción, tarjetas KPI jerarquizadas, insight cards CHTA,
-    glosario, callouts (§3.5 acto de habla "motivar").
-  · Cross-filter estilo Power BI dentro de las pestañas analíticas (§4.1 drill-down), sobre
-    los AGREGADOS cacheados; el Resumen queda sin interacción obligatoria (test de 30 s).
+DISEÑO (iteración v2 "comunicar limpio"): cada sección sigue UN patrón fijo —
+  1) una frase de mensaje (takeaway),
+  2) un gráfico HÉROE cuyo título es la acción (verbo + cifra) con la anotación que traduce
+     el hallazgo dentro del propio gráfico,
+  3) a lo sumo un apoyo (o 2–3 chips de cifra),
+  4) un chip de acción.
+Se elimina el bloque de 4 tarjetas (Contexto/Hallazgo/Traducción/Acción): esa info va en el
+título-acción y la anotación del héroe (§3.1 Data-to-Ink; §3.4 jerarquía). Resumen y
+Estrategia 1 NO comparten el mismo héroe. Un solo acento (rojo); contexto en grises (§3.2).
 
 MEMORIA: el app NO carga el clickstream crudo ni importa src/prep.py ni src/metrics.py.
 Solo consume los 5 parquets agregados (~3,9 MB) vía src/agg_metrics.py, con @st.cache_data.
 Cifras idénticas al notebook (src/verify_aggregates.py). Pico de RAM objetivo < 250 MB.
 
-Caveats de fidelidad de los filtros (el caso SIN filtros es exacto, igual que el notebook):
-  · Hora en métricas de unidad → corta por la hora del PRIMER evento de la unidad.
-  · Marca → no afecta la figura de intensidad horaria (no entra en ese agregado).
-  · Recurrencia/timing → se filtran por la categoría/marca DOMINANTE de cada ocasión.
+Caveats de fidelidad de los filtros (el caso SIN filtros es exacto, igual que el notebook;
+ver "Acerca de los datos"): hora en métricas de unidad = hora del primer evento de la unidad;
+la marca no entra en el agregado horario; recurrencia/timing por categoría dominante.
 
 Ejecutar:  .venv\\Scripts\\python.exe -m streamlit run app/app.py
 """
@@ -94,8 +93,7 @@ with st.sidebar.expander("Filtros avanzados"):
     seg = st.radio("Segmento de comprador", ["Todos", "Recurrentes", "One-time"], index=0)
 
 st.sidebar.markdown("---")
-ui.caveat("⚠️ Ventana = solo octubre 2019 (muestra por usuario, semilla 42). Son señales "
-          "sólidas para decidir, no verdades definitivas.")
+ui.about_data_expander()  # caveat metodológico fuera del flujo visual del tablero
 
 _SEG = {"Recurrentes": "recurrent", "One-time": "onetime"}
 
@@ -127,7 +125,7 @@ def filter_hourly(h):
     m = h["hour"].between(hr[0], hr[1])
     if sel_cats:
         m &= h["category_main"].isin(sel_cats)  # excluye el bucket "(sin categoria)"
-    if seg in _SEG:  # la marca NO entra en este agregado (ver caveats arriba)
+    if seg in _SEG:  # la marca NO entra en este agregado (ver "Acerca de los datos")
         m &= h["segment"].eq(_SEG[seg])
     return h[m]
 
@@ -137,52 +135,12 @@ fo = filter_occ(occ)
 fh = filter_hourly(hourly)
 
 
-# ── Cross-filter (selección Plotly -> filtra el resto de la pestaña) ──────────
-def _picked_cats(sel):
-    """Extrae las categorías seleccionadas de un evento/estado de st.plotly_chart.
-    Usa customdata (categoría) y, como respaldo, la coordenada 'y' (barras horizontales)."""
-    if sel is None:
-        return []
-    s = sel.get("selection") if isinstance(sel, dict) else getattr(sel, "selection", None)
-    if s is None:
-        return []
-    pts = s.get("points") if isinstance(s, dict) else getattr(s, "points", None)
-    out = []
-    for p in (pts or []):
-        cd = p.get("customdata") if isinstance(p, dict) else None
-        if cd:
-            out.append(cd[0] if isinstance(cd, (list, tuple)) else cd)
-        else:
-            y = p.get("y") if isinstance(p, dict) else None
-            if isinstance(y, str):
-                out.append(y)
-    seen, res = set(), []
-    for c in out:
-        if c not in seen:
-            seen.add(c)
-            res.append(c)
-    return res
+def _min_txt(m):
+    return f"{m:.1f} min".replace(".", ",") if m == m else "—"
 
 
-def active_xfilter(base_key):
-    """Categorías activas del cross-filter de esa pestaña (lee el estado del widget)."""
-    n = st.session_state.get(base_key + "_nonce", 0)
-    return _picked_cats(st.session_state.get(f"{base_key}_{n}")) or None
-
-
-def clear_xfilter(base_key):
-    """Callback de 'Limpiar selección': sube el nonce -> widget nuevo, sin selección."""
-    st.session_state[base_key + "_nonce"] = st.session_state.get(base_key + "_nonce", 0) + 1
-
-
-def selectable_chart(fig, base_key, key_suffix=""):
-    """Dibuja una figura con selección activada bajo la clave de nonce de su cross-filter."""
-    n = st.session_state.get(base_key + "_nonce", 0)
-    st.plotly_chart(fig, on_select="rerun", key=f"{base_key}_{n}{key_suffix}", width="stretch")
-
-
-def _min_txt(median_min):
-    return f"{median_min:.1f} min".replace(".", ",") if median_min == median_min else "—"
+def _days_txt(d):
+    return f"{d:.1f} días".replace(".", ",") if d == d else "—"
 
 
 # ── Guarda global: sin datos bajo los filtros del sidebar ─────────────────────
@@ -190,32 +148,31 @@ if not len(fu):
     st.warning("Ningún evento cumple los filtros del sidebar. Ajusta los controles.")
     st.stop()
 
-# KPIs reactivos (sobre los agregados filtrados por el sidebar)
 k_ab = am.abandonment(fu)
 k_ras = am.revenue_at_stake(fu)
 k_ds = am.decision_speed(fu)
 k_rec = am.recurrence(fo)
 
+# Cifras-ancla fijas para los títulos-acción (no se mueven con los filtros)
+FOCO_STAKE = A["rev_en_juego_foco"]                       # $2,08 M en electronics
+FOCO_SHARE = FOCO_STAKE / A["rev_en_juego_total"] * 100   # 82% del premio
+RECOVER_10 = FOCO_STAKE * 0.10                            # $207.700/mes (recuperar 10%)
+
 
 # ── Navegación prominente ─────────────────────────────────────────────────────
-tab_resumen, tab_a, tab_b, tab_cuando = st.tabs(
-    ["Resumen", "Palanca A · Conversión", "Palanca B · Retención", "Cuándo activar"]
+tab_resumen, tab_e1, tab_e2, tab_cuando = st.tabs(
+    ["Resumen", "Estrategia 1 · Conversión", "Estrategia 2 · Retención", "Cuándo activar"]
 )
 
 
-# ===== RESUMEN (estratégico, cero interacción requerida — test de 30 s) ========
+# ===== RESUMEN (estratégico, cero interacción — test de 30 s) ==================
 with tab_resumen:
     ui.section_header(
-        "El negocio deja dinero sobre la mesa en electrónica",
-        "Dos palancas, una misma categoría: recuperar antes de comprar y retener después.",
+        "¿En qué categoría se nos queda el dinero?",
+        "La respuesta está concentrada en una sola categoría.",
     )
-    ui.action_banner(
-        "Recupera los carritos abandonados de electrónica en la franja matutina y retén al "
-        "núcleo recurrente con un nudge de recompra a 24–72 h en su misma categoría."
-    )
-
     kpis = [
-        ("Revenue en juego", fmt_money_short(k_ras["total_en_juego"]), "carritos abandonados", True),
+        ("Revenue en juego", f"{fmt_money_short(k_ras['total_en_juego'])} USD", "carritos abandonados", True),
         ("Abandono de carrito", fmt_pct(k_ab["abandono_global"]), "de lo que llega al carrito", False),
         ("Conversión por unidad", fmt_pct(k_ab["gf"]["conv_rate"], 2), "de lo visto se compra", False),
         ("Recurrentes", fmt_pct(k_rec["pct_repeat"]), f"= {fmt_pct(k_rec['pct_rev_repeat'])} del revenue", False),
@@ -230,139 +187,139 @@ with tab_resumen:
         st.plotly_chart(charts.hero_revenue_at_stake(k_ras, foco=FOCO), key="r_hero", width="stretch")
     with ccol:
         st.markdown("")
-        ui.callout(fmt_money_short(A["rev_en_juego_foco"]), "en juego solo en electronics (82% del premio)")
-        ui.caveat("**Palanca A** — antes de comprar: incentivo de cierre en pantalla, en la mañana.")
-        ui.caveat("**Palanca B** — después: nudge de recompra a 24–72 h al recurrente.")
-
-    st.markdown("")
+        ui.callout(fmt_money_short(FOCO_STAKE), f"en juego solo en electronics ({FOCO_SHARE:.0f}% del premio)")
     ui.glossary_expander()
-    ui.caveat("Las demás historias (conversión, retención, cuándo activar) están en las "
-              "pestañas de arriba.")
 
 
-# ===== PALANCA A — CONVERSIÓN (PN1) ============================================
-with tab_a:
-    base = "xf_a"
-    active = active_xfilter(base)
-    fu_a = fu if not active else fu[fu["category_main"].isin(active)]
+# ===== ESTRATEGIA 1 · CONVERSIÓN (PN1) =========================================
+with tab_e1:
+    ui.message_line("Dónde perdemos la venta y cuánto vale recuperarla.")
 
-    ui.insight_card(
-        contexto="De cada producto que llega al carrito, ~1 de cada 3 no se compra.",
-        hallazgo=f"El abandono ({fmt_pct(k_ab['abandono_global'])}) se concentra en "
-                 f"electrónica y electrodomésticos.",
-        traduccion=f"{fmt_money_short(k_ras['total_en_juego'])} en juego en carritos "
-                   f"abandonados, la mayoría en {FOCO}.",
-        accion="Incentivo de cierre (recordatorio de carrito, urgencia/stock, financiación) "
-               "a los carritos abandonados de electrónica.",
-    )
-    ui.action_banner("Prioriza la recuperación de carritos de electrónica: ahí está el 82% del premio.")
-
-    # Héroe seleccionable (desde el nivel del sidebar -> siempre re-elegible)
-    selectable_chart(charts.hero_revenue_at_stake(am.revenue_at_stake(fu), foco=FOCO), base)
-    if active:
-        ui.filter_chip("Filtrando el detalle por: " + ", ".join(active),
-                       on_clear=lambda: clear_xfilter(base), key="a_clear")
-    else:
-        ui.caveat("💡 Haz clic en una barra para filtrar el detalle por esa categoría.")
-
-    with st.expander("Ver detalle analítico", expanded=bool(active)):
-        if not len(fu_a):
-            st.info("Sin unidades para la selección actual.")
+    hcol, scol = st.columns([3, 2], gap="large")
+    with hcol:
+        st.plotly_chart(
+            charts.funnel_chart(
+                k_ab,
+                title=f"Recuperar el 10% de los carritos de electrónica = {fmt_money(RECOVER_10)}/mes",
+                note=f"El {FOCO_SHARE:.0f}% del revenue abandonado está en electronics ({fmt_money_short(FOCO_STAKE)}).",
+            ),
+            key="e1_hero", width="stretch",
+        )
+    with scol:
+        st.markdown("")
+        bm = am.brand_mix(fu, foco=FOCO)
+        g = bm["g"]
+        if len(g) and bm["n_total"]:
+            gg = g.sort_values("carritos", ascending=False)
+            top2 = gg.head(2)
+            share = top2["carritos"].sum() / bm["n_total"] * 100
+            names = " + ".join(str(b).title() for b in top2.index)
+            top_brand = str(gg.index[0]).title()
+            top_ticket = float(gg.iloc[0]["ticket"])
+            st.markdown(ui.stat_chip("🛒", fmt_pct(share, 0), f"de los carritos: {names}"),
+                        unsafe_allow_html=True)
+            st.markdown("")
+            st.markdown(ui.stat_chip("🏷️", fmt_money(top_ticket), f"ticket medio · {top_brand}"),
+                        unsafe_allow_html=True)
         else:
-            d1, d2 = st.columns(2)
-            with d1:
-                st.plotly_chart(charts.funnel_chart(am.abandonment(fu_a)), key="a_funnel", width="stretch")
-                bm = am.brand_mix(fu_a, foco=FOCO)
-                if len(bm["g"]):
-                    st.plotly_chart(charts.brand_chart(bm), key="a_brand", width="stretch")
-                else:
-                    st.info(f"Sin marcas con suficiente volumen en {FOCO} para la selección.")
-            with d2:
-                st.plotly_chart(charts.abandonment_by_category(am.abandonment(fu)), key="a_abandono", width="stretch")
-                ui.caveat("El mapa de abandono por categoría se mantiene completo como referencia; "
-                          "el funnel y las marcas reaccionan a tu selección.")
+            st.info(f"Sin marcas con volumen suficiente en {FOCO} para el filtro actual.")
+
+    ui.action_chip("Incentivo de cierre inmediato/en pantalla, en la franja matutina.", icon="🎯")
+
+    with st.expander("Ver detalle analítico"):
+        d1, d2 = st.columns(2)
+        with d1:
+            st.plotly_chart(charts.abandonment_by_category(k_ab), key="e1_abandono", width="stretch")
+        with d2:
+            if len(g):
+                st.plotly_chart(charts.brand_chart(bm), key="e1_brand", width="stretch")
+            else:
+                st.info("Sin marcas suficientes para el detalle.")
 
 
-# ===== PALANCA B — RETENCIÓN (PN2) =============================================
-with tab_b:
+# ===== ESTRATEGIA 2 · RETENCIÓN (PN2) ==========================================
+with tab_e2:
     rt = am.repurchase_timing(fo)
-    dias_txt = f"{rt['median_days']:.1f}".replace(".", ",") if rt["median_days"] == rt["median_days"] else "—"
-
-    ui.insight_card(
-        contexto="La mayoría de compradores compra una sola vez.",
-        hallazgo=f"El {fmt_pct(k_rec['pct_repeat'])} recurrente concentra el "
-                 f"{fmt_pct(k_rec['pct_rev_repeat'])} del revenue (ticket "
-                 f"{fmt_money(k_rec['ticket_repeat'])} vs {fmt_money(k_rec['ticket_one_time'])}).",
-        traduccion="Retener a ese núcleo rinde más que captar un comprador nuevo.",
-        accion=f"Nudge de recompra a 24–72 h: la 2a compra llega en mediana {dias_txt} días, "
-               f"{fmt_pct(rt['same_pct'])} en la misma categoría.",
+    ratio = (k_rec["ticket_repeat"] / k_rec["ticket_one_time"]
+             if k_rec["ticket_one_time"] else float("nan"))
+    ratio_txt = f"{ratio:.1f}×".replace(".", ",") if ratio == ratio else "—"
+    ui.message_line(
+        f"El {fmt_pct(k_rec['pct_repeat'])} de los compradores trae el "
+        f"{fmt_pct(k_rec['pct_rev_repeat'])} del revenue — ticket {ratio_txt} "
+        f"({fmt_money(k_rec['ticket_repeat'])} vs {fmt_money(k_rec['ticket_one_time'])})."
     )
-    ui.action_banner("Activa un programa de recompra para el núcleo recurrente: 1 de cada 3 "
-                     "compradores ya trae 7 de cada 10 dólares.")
 
     if k_rec["repeat"] > 0:
-        h1, h2 = st.columns([3, 1], gap="large")
-        with h1:
-            st.plotly_chart(charts.hero_retention(k_rec), key="b_hero", width="stretch")
-        with h2:
+        hcol, tcol = st.columns([3, 2], gap="large")
+        with hcol:
+            st.plotly_chart(
+                charts.hero_retention(
+                    k_rec, title="Fideliza al tercio que ya vuelve: genera 2 de cada 3 dólares"),
+                key="e2_hero", width="stretch",
+            )
+        with tcol:
             st.markdown("")
-            ui.callout(fmt_pct(k_rec["pct_rev_repeat"]), "del revenue lo trae el núcleo recurrente")
+            days = rt["days"]
+            milestones = None
+            if len(days):
+                p1 = float((days <= 1).mean() * 100)
+                p7 = float((days <= 7).mean() * 100)
+                milestones = [(100 * 1 / 14, f"1 día · {p1:.0f}%"), (100 * 7 / 14, f"7 días · {p7:.0f}%")]
+            ui.time_panel(
+                value=_days_txt(rt["median_days"]),
+                caption="mediana hasta la 2ª compra",
+                milestones=milestones,
+                badge=f"{fmt_pct(rt['same_pct'])} vuelve a la misma categoría"
+                      if rt["same_pct"] == rt["same_pct"] else None,
+            )
     else:
         st.info("Sin compradores recurrentes en el filtro actual (prueba 'Segmento = Todos').")
 
-    with st.expander("Ver detalle analítico", expanded=False):
+    ui.action_chip("Nudge de recompra a 24–72 h, en la misma categoría.", icon="🔔")
+
+    with st.expander("Ver detalle analítico"):
         d1, d2 = st.columns(2)
         with d1:
-            st.plotly_chart(charts.ticket_chart(k_rec), key="b_ticket", width="stretch")
+            st.plotly_chart(charts.ticket_chart(k_rec), key="e2_ticket", width="stretch")
         with d2:
             if rt["n_recurrent"] > 0:
-                st.plotly_chart(charts.timing_chart(rt), key="b_timing", width="stretch")
+                st.plotly_chart(charts.timing_chart(rt), key="e2_timing", width="stretch")
             else:
                 st.info("Sin pares de recompra en el filtro actual.")
-    ui.caveat("En esta pestaña el control es el **segmento** del sidebar (Recurrentes / One-time); "
-              "la retención se mide a nivel de comprador, no por categoría.")
 
 
 # ===== CUÁNDO ACTIVAR (PN3) ====================================================
 with tab_cuando:
-    base = "xf_c"
-    active = active_xfilter(base)
-    fu_c = fu if not active else fu[fu["category_main"].isin(active)]
-    fh_c = fh if not active else fh[fh["category_main"].isin(active)]
-
-    hi = am.hourly_intensity(fh_c)
+    hi = am.hourly_intensity(fh)
     peak_h = int(hi["compras_x100_vistas"].idxmax()) if len(hi) else 0
-
-    ui.insight_card(
-        contexto="El tráfico pica en la tarde, pero no toda visita tiene la misma intención.",
-        hallazgo=f"La mañana convierte ~2× por visita (pico de intensidad a las {peak_h}h) y el "
-                 f"comprador con intención decide en {_min_txt(k_ds['median_min'])}.",
-        traduccion="El momento y el tipo de incentivo importan más que el precio.",
-        accion="Activa en la franja matutina (6–10 h) con incentivo inmediato/en pantalla; "
-               "el precio NO es el freno.",
-    )
-    ui.action_banner("Concentra el incentivo en la mañana: misma visita, el doble de intención de compra.")
+    ui.message_line(f"La mañana convierte ~2× por visita (pico {peak_h}h).")
 
     if len(hi):
-        st.plotly_chart(charts.hourly_intensity_chart(hi), key="c_hourly", width="stretch")
+        hcol, tcol = st.columns([3, 2], gap="large")
+        with hcol:
+            st.plotly_chart(charts.hourly_intensity_hero(hi), key="c_hero", width="stretch")
+        with tcol:
+            st.markdown("")
+            ui.time_panel(
+                value=_min_txt(k_ds["median_min"]),
+                caption="mediana de decisión (1er view → compra)",
+                sub=f"{fmt_pct(k_ds['pct_lt5'])} decide en menos de 5 min",
+            )
     else:
-        st.info("Sin eventos para la selección/franja actual.")
-    if active:
-        ui.filter_chip("Filtrando por: " + ", ".join(active),
-                       on_clear=lambda: clear_xfilter(base), key="c_clear")
+        st.info("Sin eventos para la franja/filtro actual.")
 
-    with st.expander("Ver detalle analítico", expanded=bool(active)):
+    ui.action_chip("Activa 6–10 h con incentivo inmediato/en pantalla; el precio no es el freno.",
+                   icon="🎯")
+
+    with st.expander("Ver detalle analítico"):
+        if len(hi):
+            st.plotly_chart(charts.hourly_intensity_chart(hi), key="c_hourly_detail", width="stretch")
         d1, d2 = st.columns(2)
         with d1:
-            if len(fu_c):
-                st.plotly_chart(charts.decision_speed_chart(am.decision_speed(fu_c)), key="c_speed", width="stretch")
-            else:
-                st.info("Sin unidades para la selección actual.")
+            st.plotly_chart(charts.decision_speed_chart(k_ds), key="c_speed", width="stretch")
         with d2:
-            pc = am.price_vs_conversion(fu, price_cat)  # control seleccionable (todas las categorías)
+            pc = am.price_vs_conversion(fu, price_cat)
             if len(pc):
-                selectable_chart(charts.price_vs_conversion_chart(pc, foco=FOCO), base)
-                ui.caveat("💡 Haz clic en una categoría para enfocar la intensidad horaria y la "
-                          "velocidad de decisión en ella.")
+                st.plotly_chart(charts.price_vs_conversion_chart(pc, foco=FOCO), key="c_price", width="stretch")
             else:
                 st.info("No hay categorías con ≥500 unidades en el filtro actual.")
