@@ -33,3 +33,12 @@ Thumbs.db
 # Streamlit Community Cloud (la nube clona el repo y necesita el dato). Es la única
 # salida derivada que versionamos; el resto sigue fuera de git.
 !data/processed/muestra_usuarios.parquet
+
+# Excepción: los AGREGADOS precomputados (~3,9 MB en total) SÍ se versionan. El dashboard
+# carga SOLO estos (no el clickstream crudo) para no superar el límite de RAM de la nube.
+# Reproducibles con: python -m src.build_aggregates
+!data/processed/agg_units.parquet
+!data/processed/agg_occasions.parquet
+!data/processed/agg_hourly.parquet
+!data/processed/agg_price_cat.parquet
+!data/processed/agg_anchors.parquet

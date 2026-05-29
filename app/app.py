@@ -5,9 +5,21 @@ Mensaje central D2: "el negocio deja dinero sobre la mesa en electrónica", capt
 dos momentos — Palanca A (recuperar carritos abandonados, PN1) y Palanca B (retener al
 núcleo recurrente, PN2) — con PN3 (cuándo/con qué activar el incentivo).
 
-Diseño: titular-acción FIJO arriba (cifras ancla sobre el df sin filtrar) + KPIs y gráficos
-REACTIVOS a los filtros del sidebar. 4 pestañas (Resumen / A / B / Cuándo). Reutiliza
-config.py, src/prep.py, src/metrics.py y src/funnel.py.
+Diseño: titular-acción FIJO arriba (cifras ancla, ya precomputadas) + KPIs y gráficos
+REACTIVOS a los filtros del sidebar. 4 pestañas (Resumen / A / B / Cuándo).
+
+MEMORIA: este dashboard NO carga el clickstream crudo (~980k filas / ~238 MB) ni deriva
+métricas al vuelo sobre él. Carga AGREGADOS pequeños precomputados por src/build_aggregates.py
+(~3,9 MB en disco / ~11 MB en RAM) y los filtra a su propio grano. Esto evita el pico de
+RAM que tumbaba la app en el tier gratuito de Streamlit Community Cloud. Las cifras son
+idénticas a las del notebook (verificado en src/verify_aggregates.py).
+
+Notas de fidelidad de los filtros (el caso SIN filtros es idéntico al notebook):
+  · El filtro de HORA en las métricas de unidad (funnel/abandono/revenue/decisión) corta por
+    la hora del PRIMER evento de la unidad, no troceando eventos sueltos (más coherente).
+  · El filtro de MARCA no afecta a la figura de intensidad horaria (la marca no entra en ese
+    agregado: 2.572 marcas lo dispararían). Sí afecta al resto.
+  · Recurrencia/timing se filtran por la categoría/marca DOMINANTE de cada ocasión de compra.
 
 Ejecutar:  .venv\\Scripts\\python.exe -m streamlit run app/app.py
 """
@@ -23,66 +35,57 @@ _APP_DIR = Path(__file__).resolve().parent
 _ROOT = _APP_DIR.parent
 sys.path.append(str(_ROOT))
 sys.path.insert(0, str(_APP_DIR))
-import config  # noqa: E402
-from src import prep, metrics  # noqa: E402
+from src import agg_metrics as am  # noqa: E402
 import charts  # noqa: E402
-from theme import fmt_money, fmt_money_short, fmt_pct, fmt_int  # noqa: E402
+from theme import fmt_money, fmt_money_short, fmt_pct  # noqa: E402
 
 st.set_page_config(page_title="Taller 2 — Incentivos e-commerce", page_icon="💡", layout="wide")
 
 FOCO = "electronics"
 
 
-# ── Carga de datos (cacheada) ─────────────────────────────────────────────────
-@st.cache_data(show_spinner="Cargando muestra…")
-def load_data():
-    return prep.load_sample()
+# ── Carga de AGREGADOS (cacheada; nunca el clickstream crudo) ─────────────────
+@st.cache_data(show_spinner="Cargando agregados…")
+def load_units():
+    return am.load_units()
 
 
 @st.cache_data(show_spinner=False)
-def anchors():
-    """Cifras ancla de D2, calculadas UNA vez sobre el df SIN filtrar (la 'historia' fija)."""
-    df = load_data()
-    ab = metrics.abandonment(df)
-    rec = metrics.recurrence(df)
-    ras = metrics.revenue_at_stake(df)
-    ds = metrics.decision_speed(df)
-    rt = metrics.repurchase_timing(df)
-    return {
-        "abandono_global": ab["abandono_global"],
-        "conv_global": ab["gf"]["conv_rate"],
-        "rev_en_juego_foco": float(ras["prize"].loc[FOCO, "revenue_en_juego"]) if FOCO in ras["prize"].index else 0.0,
-        "rev_en_juego_total": ras["total_en_juego"],
-        "pct_repeat": rec["pct_repeat"],
-        "pct_rev_repeat": rec["pct_rev_repeat"],
-        "median_min": ds["median_min"],
-        "median_days": rt["median_days"],
-        "same_pct": rt["same_pct"],
-    }
+def load_occasions():
+    return am.load_occasions()
 
 
 @st.cache_data(show_spinner=False)
-def recurrent_user_ids():
-    """user_id con >=2 ocasiones de compra (segmento recurrente), sobre el df completo."""
-    df = load_data()
-    ub = metrics.recurrence(df)["user_buys"]
-    return set(ub.index[ub["ocasiones"] >= 2]), set(ub.index[ub["ocasiones"] == 1])
+def load_hourly():
+    return am.load_hourly()
 
 
-df = load_data()
-A = anchors()
-rec_ids, ot_ids = recurrent_user_ids()
+@st.cache_data(show_spinner=False)
+def load_price_cat():
+    return am.load_price_cat()
+
+
+@st.cache_data(show_spinner=False)
+def load_anchors():
+    return am.load_anchors()
+
+
+units = load_units()
+occ = load_occasions()
+hourly = load_hourly()
+price_cat = load_price_cat()
+A = load_anchors()
 
 
 # ── Sidebar: filtros (revelación progresiva) ──────────────────────────────────
 st.sidebar.header("Filtros")
-cats_all = sorted(df["category_main"].dropna().unique())
+cats_all = sorted(units["category_main"].dropna().unique().tolist())
 sel_cats = st.sidebar.multiselect("Categoría", cats_all, default=[],
                                   help="Vacío = todas las categorías")
 hr = st.sidebar.slider("Hora del día", 0, 23, (0, 23))
 
 with st.sidebar.expander("Filtros avanzados"):
-    top_brands = (df["brand"].value_counts().head(30).index.tolist())
+    top_brands = units["brand"].value_counts().head(30).index.tolist()
     sel_brands = st.multiselect("Marca (top 30 por volumen)", top_brands, default=[],
                                 help="Vacío = todas las marcas")
     seg = st.radio("Segmento de comprador", ["Todos", "Recurrentes", "One-time"], index=0)
@@ -93,22 +96,44 @@ st.sidebar.caption(
     "sólidas para decidir, no verdades definitivas."
 )
 
+_SEG = {"Recurrentes": "recurrent", "One-time": "onetime"}
 
-# ── Aplicar filtros ───────────────────────────────────────────────────────────
-def apply_filters(d):
-    m = d["hour"].between(hr[0], hr[1])
+
+# ── Aplicar filtros a cada agregado (a su grano) ──────────────────────────────
+def filter_units(u):
+    m = u["unit_hour"].between(hr[0], hr[1])
     if sel_cats:
-        m &= d["category_main"].isin(sel_cats)
+        m &= u["category_main"].isin(sel_cats)
     if sel_brands:
-        m &= d["brand"].isin(sel_brands)
-    if seg == "Recurrentes":
-        m &= d["user_id"].isin(rec_ids)
-    elif seg == "One-time":
-        m &= d["user_id"].isin(ot_ids)
-    return d[m]
+        m &= u["brand"].isin(sel_brands)
+    if seg in _SEG:
+        m &= u["segment"].eq(_SEG[seg])
+    return u[m]
 
 
-dff = apply_filters(df)
+def filter_occ(o):
+    m = o["hour"].between(hr[0], hr[1])
+    if sel_cats:
+        m &= o["category"].isin(sel_cats)
+    if sel_brands:
+        m &= o["brand"].isin(sel_brands)
+    if seg in _SEG:
+        m &= o["segment"].eq(_SEG[seg])
+    return o[m]
+
+
+def filter_hourly(h):
+    m = h["hour"].between(hr[0], hr[1])
+    if sel_cats:
+        m &= h["category_main"].isin(sel_cats)  # excluye el bucket "(sin categoria)"
+    if seg in _SEG:  # la marca NO entra en este agregado (ver nota de fidelidad arriba)
+        m &= h["segment"].eq(_SEG[seg])
+    return h[m]
+
+
+fu = filter_units(units)
+fo = filter_occ(occ)
+fh = filter_hourly(hourly)
 filtros_activos = bool(sel_cats or sel_brands or seg != "Todos" or hr != (0, 23))
 
 
@@ -129,11 +154,11 @@ st.markdown("---")
 st.caption("Indicadores (reaccionan a los filtros del sidebar):" if filtros_activos
            else "Indicadores (muestra completa — usa el sidebar para filtrar):")
 
-# KPIs reactivos sobre el df filtrado
-k_ab = metrics.abandonment(dff) if len(dff) else None
-k_rec = metrics.recurrence(dff) if len(dff) else None
-k_ras = metrics.revenue_at_stake(dff) if len(dff) else None
-k_ds = metrics.decision_speed(dff) if len(dff) else None
+# KPIs reactivos sobre los agregados filtrados
+k_ab = am.abandonment(fu) if len(fu) else None
+k_rec = am.recurrence(fo) if len(fo) else None
+k_ras = am.revenue_at_stake(fu) if len(fu) else None
+k_ds = am.decision_speed(fu) if len(fu) else None
 
 m1, m2, m3, m4, m5 = st.columns(5)
 m1.metric("Revenue en juego", fmt_money_short(k_ras["total_en_juego"]) if k_ras else "—")
@@ -141,9 +166,10 @@ m2.metric("Abandono de carrito", fmt_pct(k_ab["abandono_global"]) if k_ab else "
 m3.metric("Conversión por unidad", fmt_pct(k_ab["gf"]["conv_rate"], 2) if k_ab else "—")
 m4.metric("Recurrentes / su revenue",
           f"{fmt_pct(k_rec['pct_repeat'])} / {fmt_pct(k_rec['pct_rev_repeat'])}" if k_rec else "—")
-m5.metric("Decisión (mediana)", f"{k_ds['median_min']:.1f} min".replace(".", ",") if k_ds and k_ds["median_min"] == k_ds["median_min"] else "—")
+m5.metric("Decisión (mediana)",
+          f"{k_ds['median_min']:.1f} min".replace(".", ",") if k_ds and k_ds["median_min"] == k_ds["median_min"] else "—")
 
-if not len(dff):
+if not len(fu):
     st.warning("Ningún evento cumple los filtros actuales. Ajusta el sidebar.")
     st.stop()
 
@@ -185,7 +211,7 @@ with tab_a:
         st.plotly_chart(charts.funnel_chart(k_ab), key="a_funnel", width="stretch")
     with ca2:
         st.plotly_chart(charts.abandonment_by_category(k_ab), key="a_abandono", width="stretch")
-        bm = metrics.brand_mix(dff, foco=FOCO)
+        bm = am.brand_mix(fu, foco=FOCO)
         if len(bm["g"]):
             st.plotly_chart(charts.brand_chart(bm), key="a_brand", width="stretch")
         else:
@@ -193,7 +219,7 @@ with tab_a:
 
 # --- Palanca B: PN2 ---
 with tab_b:
-    rt = metrics.repurchase_timing(dff)
+    rt = am.repurchase_timing(fo)
     dias_txt = f"{rt['median_days']:.1f}".replace(".", ",") if rt["median_days"] == rt["median_days"] else "—"
     st.markdown(
         "#### PN2 — ¿Quiénes son los clientes valiosos y cómo retenerlos?\n"
@@ -219,9 +245,9 @@ with tab_b:
 
 # --- Cuándo activar: PN3 ---
 with tab_cuando:
-    hi = metrics.hourly_intensity(dff)
-    pc = metrics.price_vs_conversion(dff)
-    peak_h = int(hi["compras_x100_vistas"].idxmax())
+    hi = am.hourly_intensity(fh)
+    pc = am.price_vs_conversion(fu, price_cat)
+    peak_h = int(hi["compras_x100_vistas"].idxmax()) if len(hi) else 0
     min_txt = f"{k_ds['median_min']:.1f}".replace(".", ",") if k_ds["median_min"] == k_ds["median_min"] else "—"
     st.markdown(
         "#### PN3 — ¿Cuándo y con qué activar el incentivo?\n"
@@ -232,7 +258,10 @@ with tab_cuando:
         "**Acción:** activar en la franja matutina (6–10 h), incentivo inmediato/en "
         "pantalla; el precio NO es el freno."
     )
-    st.plotly_chart(charts.hourly_intensity_chart(hi), key="c_hourly", width="stretch")
+    if len(hi):
+        st.plotly_chart(charts.hourly_intensity_chart(hi), key="c_hourly", width="stretch")
+        st.caption("La figura horaria no reacciona al filtro de marca (la marca no entra en "
+                   "su agregado).")
     cc1, cc2 = st.columns(2)
     with cc1:
         st.plotly_chart(charts.decision_speed_chart(k_ds), key="c_speed", width="stretch")
