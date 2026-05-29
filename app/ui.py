@@ -148,10 +148,11 @@ header[data-testid="stHeader"] { background: transparent; height: 0; }
 .ecsa-plan-head b { color: __RED__; }
 .ecsa-plan-sub { font-size: 15px; color: __GRAY600__; margin-bottom: 12px; }
 .ecsa-actioncard { border: 1px solid __GRAY200__; border-radius: 12px; padding: 16px 18px; background: __SURFACE__; height: 100%; }
-.ecsa-actioncard.accent { border-left: 4px solid __RED__; }
-.ecsa-actioncard .kick { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: __RED__; }
+/* Las tarjetas del Plan muestran GANANCIA al actuar (+$) -> acento VERDE (positivo). */
+.ecsa-actioncard.accent { border-left: 4px solid __GREEN__; }
+.ecsa-actioncard .kick { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: __GREEN__; }
 .ecsa-actioncard .msg { font-size: 14.5px; color: __GRAY900__; margin: 6px 0 12px 0; }
-.ecsa-actioncard .amt { font-size: 30px; font-weight: 600; color: __RED__; line-height: 1.05; }
+.ecsa-actioncard .amt { font-size: 30px; font-weight: 600; color: __GREEN__; line-height: 1.05; }
 .ecsa-actioncard .amtcap { font-size: 12.5px; color: __GRAY600__; }
 .ecsa-band { display: flex; align-items: baseline; gap: 12px; justify-content: center; flex-wrap: wrap;
   background: __REDSOFT__; border: 1px solid __RED__; border-radius: 12px; padding: 14px 18px; margin: 10px 0; }

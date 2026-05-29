@@ -82,8 +82,10 @@ Responde **dos preguntas** en orden, con la misma categoría como respuesta a am
   (electronics en verde 🟢 y bola más grande).
 
 ## 5. Plan de acción  (cierre que motiva — el "qué hacer" en $)
-- **Titular:** *"Hay **$2,53 M USD** sobre la mesa — y casi todo está en electrónica."* ($ en rojo).
-- **Dos tarjetas de acción (USD):**
+Lectura de color: el **problema en rojo** arriba → las **ganancias en verde** abajo.
+- **Titular:** *"Hay **$2,53 M USD** sobre la mesa — y casi todo está en electrónica."*
+  ($ en 🔴 rojo: dinero en riesgo).
+- **Dos tarjetas de acción (USD), con el monto en 🟢 verde (ganancia al actuar):**
   - **Estrategia 1 · Recuperar** — carritos de Apple y Samsung, cierre inmediato en la mañana →
     **+$207.700 / mes** (recuperando el 10% de lo abandonado en electronics).
   - **Estrategia 2 · Retener** — nudge de recompra 24–72 h, misma categoría → **+$306.850**
