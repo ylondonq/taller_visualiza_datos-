@@ -200,7 +200,6 @@ RECOVER_10 = FOCO_STAKE * 0.10                            # +$207.700/mes (recup
 _rec_full = am.recurrence(occ)                            # recurrencia sobre la muestra completa
 GAP_OT_REC = _rec_full["ticket_repeat"] - _rec_full["ticket_one_time"]  # brecha de ticket
 RETAIN_5 = _rec_full["one_time"] * 0.05 * GAP_OT_REC      # +$306.850 (mover 5% de one-time a recurrente)
-COMBINED = RECOVER_10 + RETAIN_5                          # ≈ $514.550 potencial combinado
 
 
 # ── Navegación prominente ─────────────────────────────────────────────────────
@@ -403,13 +402,11 @@ with tab_cuando:
                 st.info("No hay categorías con ≥500 unidades en el filtro actual.")
 
 
-# ===== PLAN DE ACCIÓN (cierre que motiva — acto de habla, §3.5) ================
+# ===== PLAN DE ACCIÓN (cierre que motiva — solo headline + 2 tarjetas, §8) =====
 with tab_plan:
-    ui.plan_headline(
-        f"Hay <b>{fmt_money_short(TOTAL_STAKE)} USD</b> sobre la mesa — y casi todo está en electrónica.",
-        f"Electronics = {FOCO_SHARE:.0f}% del revenue abandonado ({fmt_money_short(FOCO_STAKE)}). "
-        "Dos jugadas, una sola categoría. Esto es lo que recuperamos:",
-    )
+    # Titular: "$2,53 M" (trunca a 2 decimales, como pide el prompt; el KPI muestra el redondeo 2,54)
+    _total_m = f"${int(TOTAL_STAKE / 10000) / 100:.2f} M USD".replace(".", ",")
+    ui.plan_headline(f"Hay <b>{_total_m}</b> sobre la mesa — y casi todo está en electrónica.")
     p1, p2 = st.columns(2, gap="large")
     p1.markdown(
         ui.action_card(
@@ -423,8 +420,3 @@ with tab_plan:
             "Nudge de recompra a 24–72 h, en la misma categoría.",
             f"+{fmt_money(RETAIN_5)}", "moviendo el 5% de los compradores de una vez al núcleo recurrente"),
         unsafe_allow_html=True)
-    ui.combined_band(f"≈ {fmt_money(COMBINED)} USD", "potencial combinado",
-                     "(en la muestra del 2,3% de octubre)")
-    ui.closing_line(
-        "No es venderle más a todos: es recuperar lo que ya casi compraste y cuidar a quien "
-        "ya vuelve. Las dos jugadas están en electrónica. <b>Empecemos por ahí.</b>")

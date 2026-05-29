@@ -284,10 +284,10 @@ def price_compare_card(best, cheap):
 
 
 # ── Plan de acción (cierre) ─────────────────────────────────────────────────────
-def plan_headline(html_amount, subtitle):
-    """Titular grande del cierre (el monto admite <b> para teñir de rojo)."""
-    st.markdown(f'<div class="ecsa-plan-head">{html_amount}</div>'
-                f'<div class="ecsa-plan-sub">{subtitle}</div>', unsafe_allow_html=True)
+def plan_headline(html_amount, subtitle=""):
+    """Titular grande del cierre (el monto admite <b> para teñir de rojo). Subtítulo opcional."""
+    sub = f'<div class="ecsa-plan-sub">{subtitle}</div>' if subtitle else ""
+    st.markdown(f'<div class="ecsa-plan-head">{html_amount}</div>{sub}', unsafe_allow_html=True)
 
 
 def action_card(kicker, message, amount, amount_caption):
