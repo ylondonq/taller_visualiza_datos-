@@ -56,45 +56,65 @@ FOCO = "electronics"
 
 
 # ── Carga de AGREGADOS (cacheada; nunca el clickstream crudo) ─────────────────
+# La caché se versiona por una huella de los parquets (mtime+size). Así, cuando Streamlit
+# Community Cloud hace un redeploy "en caliente" y los parquets cambian, el argumento `v`
+# cambia y la caché se invalida sola (de lo contrario @st.cache_data devolvería el resultado
+# viejo aunque el dato haya cambiado — fue la causa de un KeyError tras añadir columnas).
+_AGG_FILES = (am.AGG_UNITS, am.AGG_OCCASIONS, am.AGG_HOURLY,
+              am.AGG_PRICE_CAT, am.AGG_REVENUE_CAT, am.AGG_ANCHORS)
+
+
+def _data_version():
+    parts = []
+    for p in _AGG_FILES:
+        try:
+            s = p.stat()
+            parts.append(f"{s.st_mtime_ns}:{s.st_size}")
+        except OSError:
+            parts.append("na")
+    return "|".join(parts)
+
+
 @st.cache_data(show_spinner="Cargando agregados…")
-def load_units():
+def load_units(v):
     return am.load_units()
 
 
 @st.cache_data(show_spinner=False)
-def load_occasions():
+def load_occasions(v):
     return am.load_occasions()
 
 
 @st.cache_data(show_spinner=False)
-def load_hourly():
+def load_hourly(v):
     return am.load_hourly()
 
 
 @st.cache_data(show_spinner=False)
-def load_price_cat():
+def load_price_cat(v):
     return am.load_price_cat()
 
 
 @st.cache_data(show_spinner=False)
-def load_revenue_cat():
+def load_revenue_cat(v):
     return am.load_revenue_cat()
 
 
 @st.cache_data(show_spinner=False)
-def load_anchors():
+def load_anchors(v):
     return am.load_anchors()
 
 
 ui.inject_global_css()
 ui.header_bar()
 
-units = load_units()
-occ = load_occasions()
-hourly = load_hourly()
-price_cat = load_price_cat()
-revenue_cat = load_revenue_cat()
-A = load_anchors()
+_DV = _data_version()
+units = load_units(_DV)
+occ = load_occasions(_DV)
+hourly = load_hourly(_DV)
+price_cat = load_price_cat(_DV)
+revenue_cat = load_revenue_cat(_DV)
+A = load_anchors(_DV)
 
 
 # ── Sidebar: controles globales (revelación progresiva, §4.3) ─────────────────
@@ -170,13 +190,16 @@ k_ras = am.revenue_at_stake(fu)
 k_ds = am.decision_speed(fu)
 k_rec = am.recurrence(fo)
 
-# Cifras-ancla fijas para los títulos-acción y el Plan (no se mueven con los filtros)
+# Cifras-ancla fijas para los títulos-acción y el Plan (no se mueven con los filtros).
+# El retén se calcula desde la recurrencia COMPLETA (no del esquema de anclas) para no
+# depender de columnas nuevas en el parquet de anclas.
 FOCO_STAKE = A["rev_en_juego_foco"]                       # $2,08 M en electronics
 TOTAL_STAKE = A["rev_en_juego_total"]                     # $2,53 M en juego (total)
 FOCO_SHARE = FOCO_STAKE / TOTAL_STAKE * 100               # 82% del premio
 RECOVER_10 = FOCO_STAKE * 0.10                            # +$207.700/mes (recuperar 10% en electronics)
-GAP_OT_REC = A["ticket_repeat"] - A["ticket_one_time"]    # brecha de ticket one-time -> recurrente
-RETAIN_5 = A["one_time"] * 0.05 * GAP_OT_REC              # +$306.850 (mover 5% de one-time a recurrente)
+_rec_full = am.recurrence(occ)                            # recurrencia sobre la muestra completa
+GAP_OT_REC = _rec_full["ticket_repeat"] - _rec_full["ticket_one_time"]  # brecha de ticket
+RETAIN_5 = _rec_full["one_time"] * 0.05 * GAP_OT_REC      # +$306.850 (mover 5% de one-time a recurrente)
 COMBINED = RECOVER_10 + RETAIN_5                          # ≈ $514.550 potencial combinado
 
 
