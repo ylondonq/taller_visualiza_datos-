@@ -49,6 +49,7 @@ AGG_UNITS = config.DATA_PROCESSED / "agg_units.parquet"
 AGG_OCCASIONS = config.DATA_PROCESSED / "agg_occasions.parquet"
 AGG_HOURLY = config.DATA_PROCESSED / "agg_hourly.parquet"
 AGG_PRICE_CAT = config.DATA_PROCESSED / "agg_price_cat.parquet"
+AGG_REVENUE_CAT = config.DATA_PROCESSED / "agg_revenue_cat.parquet"
 AGG_ANCHORS = config.DATA_PROCESSED / "agg_anchors.parquet"
 
 NO_CAT = "(sin categoria)"  # sentinela para eventos sin category_main en el agregado horario
@@ -171,6 +172,25 @@ def build_price_cat(df):
     return price_cat
 
 
+def build_revenue_cat(df):
+    """Revenue REAL por categoría (ingresos de hoy): suma del precio de los eventos purchase
+    por category_main. pct = sobre el total de revenue de compras (incluye no-categorizadas en
+    el denominador). Es la base del "dónde se gana hoy" (electronics ~78%). Coincide con el
+    Pareto del notebook (4.8d)."""
+    purch = df[df["event_type"] == "purchase"]
+    total = float(purch["price"].sum())
+    rev = (
+        purch.groupby("category_main", observed=True)["price"].sum()
+        .rename("revenue").reset_index()
+    )
+    rev["pct"] = rev["revenue"] / total * 100
+    rev = rev.sort_values("revenue", ascending=False).reset_index(drop=True)
+    rev["category_main"] = rev["category_main"].astype("category")
+    rev["revenue"] = rev["revenue"].astype("float32")
+    rev["pct"] = rev["pct"].astype("float32")
+    return rev
+
+
 def build_anchors(df):
     """Cifras ancla del titular (FIJAS), tomadas de src/metrics.py sobre el df SIN filtrar:
     son exactamente las del notebook (verdad de tierra)."""
@@ -187,6 +207,8 @@ def build_anchors(df):
         "rev_en_juego_total": ras["total_en_juego"],
         "pct_repeat": rec["pct_repeat"],
         "pct_rev_repeat": rec["pct_rev_repeat"],
+        "one_time": rec["one_time"],          # nº compradores de una sola ocasión (para el Plan)
+        "repeat": rec["repeat"],
         "ticket_one_time": rec["ticket_one_time"],
         "ticket_repeat": rec["ticket_repeat"],
         "median_min": ds["median_min"],
@@ -206,13 +228,22 @@ def main():
     occ = build_occasions(df, user_segment)
     hourly = build_hourly(df, user_segment)
     price_cat = build_price_cat(df)
+    revenue_cat = build_revenue_cat(df)
     anchors = build_anchors(df)
+
+    # Diagnóstico de la cuota de electronics (debe ~78% vs notebook)
+    _rc = revenue_cat.set_index("category_main")
+    if "electronics" in _rc.index:
+        _cat_total = float(revenue_cat["revenue"].sum())
+        print(f"  revenue electronics: {_rc.loc['electronics', 'pct']:.1f}% del total "
+              f"(o {_rc.loc['electronics', 'revenue'] / _cat_total * 100:.1f}% del categorizado)")
 
     outputs = {
         AGG_UNITS: units,
         AGG_OCCASIONS: occ,
         AGG_HOURLY: hourly,
         AGG_PRICE_CAT: price_cat,
+        AGG_REVENUE_CAT: revenue_cat,
         AGG_ANCHORS: anchors,
     }
     print("\nGuardando agregados:")

@@ -19,7 +19,6 @@ import sys
 from pathlib import Path
 
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import theme  # noqa: E402
@@ -32,9 +31,32 @@ CTX = GRAY_400        # contexto principal (series "el resto")
 CTX_BG = GRAY_200     # contexto al fondo (lo menos importante)
 
 
+# ── Ingresos reales por categoría (Resumen · pregunta 1: dónde se gana hoy) ────
+def revenue_share_chart(rev_cat, foco="electronics", title=None, top_n=6, height=360):
+    """Barras horizontales del % de ingresos REALES por categoría; foco en rojo, resto gris.
+    Responde '¿cuáles negocios me dan más ingresos?'."""
+    rc = rev_cat.sort_values("revenue", ascending=False).head(top_n).iloc[::-1]
+    cats = [str(c) for c in rc["category_main"]]
+    vals = rc["pct"].tolist()
+    colors = [BRAND_RED if c == foco else CTX_BG for c in cats]
+    fig = theme.base_fig()
+    fig.add_bar(
+        x=vals, y=cats, orientation="h", marker_color=colors, customdata=cats,
+        text=[fmt_pct(v) for v in vals], textposition="outside", textfont=dict(color=GRAY_600),
+        hovertemplate="%{customdata}: %{x:.1f}% de los ingresos<extra></extra>",
+    )
+    fig.update_layout(
+        title=title or "Dónde se gana hoy: ingresos por categoría",
+        xaxis_title="% de los ingresos", yaxis_title="Categoría",
+        xaxis_range=[0, max(vals) * 1.18], height=height, showlegend=False,
+    )
+    return fig
+
+
 # ── Héroe A (PN1): revenue en juego por categoría ─────────────────────────────
-def hero_revenue_at_stake(ras, foco="electronics"):
-    """Barras horizontales del revenue abandonado por categoría; foco en rojo, resto gris."""
+def hero_revenue_at_stake(ras, foco="electronics", title=None, height=420, annotate=True):
+    """Barras horizontales del revenue abandonado por categoría; foco en rojo, resto gris.
+    Responde '¿en cuáles podría tener más si se concretaran las compras?'."""
     prize = ras["prize"].sort_values("revenue_en_juego")  # menor->mayor (mayor arriba)
     cats = list(prize.index)
     vals = prize["revenue_en_juego"].tolist()
@@ -50,11 +72,11 @@ def hero_revenue_at_stake(ras, foco="electronics"):
     )
     top = prize["revenue_en_juego"].max()
     fig.update_layout(
-        title="Dónde se queda el dinero: carritos abandonados por categoría",
-        xaxis_title="Revenue en juego (USD)", yaxis_title=None,
-        xaxis_range=[0, top * 1.18], height=420, showlegend=False,
+        title=title or "Dónde se queda el dinero: carritos abandonados por categoría",
+        xaxis_title="Revenue en juego (USD)", yaxis_title="Categoría",
+        xaxis_range=[0, top * 1.18], height=height, showlegend=False,
     )
-    if foco in prize.index:
+    if annotate and foco in prize.index:
         fig.add_annotation(
             x=prize.loc[foco, "revenue_en_juego"], y=foco,
             text="82% del premio total<br>se concentra aquí",
@@ -107,13 +129,20 @@ def funnel_chart(ab, title=None, note=None):
     title: título-acción (verbo + cifra). note: subtítulo/anotación que traduce el hallazgo."""
     gf = ab["gf"]
     abandono = 100 - gf["cart_to_purchase"]
+    vals = [gf["n_units"], gf["reached_cart"], gf["reached_purchase"]]
+    # etiquetas con separador de miles es-CO (puntos) y % con coma decimal — NUNCA "k"
+    def _miles(n):
+        return f"{int(round(n)):,}".replace(",", ".")
+
+    def _pct1(p):
+        return f"{p:.1f}".replace(".", ",")
+    labels = [f"{_miles(v)} ({_pct1(v / vals[0] * 100)}%)" for v in vals]
     fig = theme.base_fig()
     fig.add_trace(go.Funnel(
         y=["Vista", "Llega al carrito", "Compra"],
-        x=[gf["n_units"], gf["reached_cart"], gf["reached_purchase"]],
-        textinfo="value+percent initial",
+        x=vals, text=labels, textinfo="text",
         marker_color=[CTX_BG, CTX, BRAND_RED],  # gradiente gris->rojo: la compra es lo que importa
-        hovertemplate="%{y}: %{x:,} unidades<extra></extra>",
+        hovertemplate="%{y}: %{text}<extra></extra>",
     ))
     fig.update_layout(
         title=title or f"Funnel por unidad — solo el {fmt_pct(gf['conv_rate'], 2)} de lo visto se compra",
@@ -134,26 +163,26 @@ def funnel_chart(ab, title=None, note=None):
 
 
 # ── Héroe intensidad horaria de un panel (PN3) ────────────────────────────────
-def hourly_intensity_hero(hi, title=None):
-    """Un solo panel: compras por 100 vistas por hora; el pico en rojo, resto gris.
-    Versión 'héroe' (limpia) del análisis horario; el detalle de 2 paneles va aparte."""
+def hourly_intensity_hero(hi, title=None, band=(6, 10)):
+    """Un solo panel: compras por 100 vistas por hora. La FRANJA estratégica (6–10 h) se
+    resalta como banda roja translúcida y sus barras en rojo; el resto del día en gris.
+    No se marca una sola hora: la decisión es activar en toda la franja matutina (§3.4)."""
     horas = list(hi.index)
-    peak_h = int(hi["compras_x100_vistas"].idxmax()) if len(hi) else 0
-    colors = [BRAND_RED if h == peak_h else CTX_BG for h in horas]
+    lo, hi_b = band
+    colors = [BRAND_RED if lo <= h <= hi_b else CTX_BG for h in horas]
     fig = theme.base_fig()
     fig.add_bar(x=horas, y=hi["compras_x100_vistas"], marker_color=colors,
                 hovertemplate="%{x}h: %{y:.2f} compras/100 vistas<extra></extra>")
+    fig.add_vrect(
+        x0=lo - 0.5, x1=hi_b + 0.5, fillcolor=BRAND_RED, opacity=0.08, line_width=0,
+        annotation_text=f"Franja matutina {lo}–{hi_b} h", annotation_position="top left",
+        annotation_font=dict(color=BRAND_RED, size=12),
+    )
     fig.update_layout(
-        title=title or f"La mañana decide: pico de intensidad a las {peak_h}h",
+        title=title or f"Franja matutina ({lo}–{hi_b} h): convierte ~2× por visita",
         xaxis_title="Hora del día", yaxis_title="Compras por 100 vistas",
         height=420, showlegend=False,
     )
-    if len(hi):
-        fig.add_annotation(
-            x=peak_h, y=float(hi["compras_x100_vistas"].max()),
-            text="~2× la intensidad<br>de la tarde", showarrow=True, arrowhead=2,
-            arrowcolor=BRAND_RED, ax=45, ay=-28, font=dict(color=BRAND_RED, size=12), align="left",
-        )
     return fig
 
 
@@ -245,38 +274,9 @@ def ticket_chart(rec):
     return fig
 
 
-# ── Intensidad horaria (PN3) ──────────────────────────────────────────────────
-def hourly_intensity_chart(hi):
-    """Dos paneles: distribución horaria normalizada (izq) e intensidad de compra (der)."""
-    horas = list(hi.index)
-    fig = make_subplots(
-        rows=1, cols=2,
-        subplot_titles=("Distribución por hora (normalizada por tipo)",
-                        "Intensidad: compras por 100 vistas"),
-    )
-    # Panel izq: vistas y carritos como contexto (grises), compras en rojo (lo que importa)
-    fig.add_scatter(x=horas, y=hi["%_vistas"], name="Vistas", line=dict(color=CTX_BG, width=2),
-                    mode="lines+markers", row=1, col=1)
-    fig.add_scatter(x=horas, y=hi["%_carritos"], name="Carritos", line=dict(color=CTX, width=2),
-                    mode="lines+markers", row=1, col=1)
-    fig.add_scatter(x=horas, y=hi["%_compras"], name="Compras", line=dict(color=BRAND_RED, width=3),
-                    mode="lines+markers", row=1, col=1)
-    # Panel der: intensidad, pico en rojo
-    peak_h = int(hi["compras_x100_vistas"].idxmax())
-    bar_colors = [BRAND_RED if h == peak_h else CTX_BG for h in horas]
-    fig.add_bar(x=horas, y=hi["compras_x100_vistas"], marker_color=bar_colors, showlegend=False,
-                hovertemplate="%{x}h: %{y:.2f} compras/100 vistas<extra></extra>", row=1, col=2)
-
-    fig.update_xaxes(title_text="Hora del día", row=1, col=1)
-    fig.update_xaxes(title_text="Hora del día", row=1, col=2)
-    fig.update_yaxes(title_text="% de sus eventos", row=1, col=1)
-    fig.update_yaxes(title_text="Compras por 100 vistas", row=1, col=2)
-    fig.update_layout(
-        template="taller", height=420,
-        title="La mañana decide: pico de compra a las 7h y ~2× de intensidad por visita",
-        legend=dict(orientation="h", y=1.12, x=0),
-    )
-    return fig
+# (Se eliminó hourly_intensity_chart de 2 paneles: la distribución normalizada era
+#  redundante con la intensidad. Cuándo activar usa solo hourly_intensity_hero con la
+#  banda 6–10 h. §7: "deja UN solo visual horario").
 
 
 # ── Velocidad de decisión (PN3) ───────────────────────────────────────────────

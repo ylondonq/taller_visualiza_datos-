@@ -124,6 +124,41 @@ header[data-testid="stHeader"] { background: transparent; height: 0; }
 .ecsa-time .badge { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: __RED__; background: __REDSOFT__; border: 1px solid __RED__; border-radius: 999px; padding: 4px 12px; }
 .ecsa-time .sub { font-size: 13px; color: __GRAY600__; margin-top: 6px; }
 
+.ecsa-time .bandwin { position: absolute; top: -4px; height: 14px; background: rgba(200,16,46,.14); border: 1px solid __RED__; border-radius: 4px; }
+.ecsa-time .bandlbl { position: absolute; top: -22px; font-size: 11px; font-weight: 500; color: __RED__; transform: translateX(-50%); white-space: nowrap; }
+
+/* Tarjeta "el precio no es el freno" */
+.ecsa-pricecard { border: 1px solid __GRAY200__; border-radius: 12px; padding: 14px 16px; background: __SURFACE__; }
+.ecsa-pricecard .title { font-size: 15px; font-weight: 600; color: __GRAY900__; margin-bottom: 8px; }
+.ecsa-pricecard .prow { display: flex; align-items: baseline; gap: 8px; padding: 7px 0; border-bottom: 1px solid __GRAY100__; }
+.ecsa-pricecard .prow:last-of-type { border-bottom: none; }
+.ecsa-pricecard .cat { width: 96px; font-weight: 500; color: __GRAY600__; }
+.ecsa-pricecard .prow.best .cat { color: __RED__; }
+.ecsa-pricecard .px { color: __GRAY600__; font-size: 13.5px; }
+.ecsa-pricecard .arrow { color: __GRAY400__; }
+.ecsa-pricecard .cv { font-size: 18px; font-weight: 600; color: __GRAY900__; }
+.ecsa-pricecard .prow.best .cv { color: __RED__; }
+.ecsa-pricecard .tag { margin-left: auto; font-size: 12px; color: __GRAY600__; }
+.ecsa-pricecard .foot { font-size: 13px; color: __GRAY900__; margin-top: 10px; }
+
+/* Plan de acción (cierre que motiva) */
+.ecsa-plan-head { font-size: 30px; font-weight: 600; color: __GRAY900__; line-height: 1.2; margin: 4px 0 2px 0; }
+.ecsa-plan-head b { color: __RED__; }
+.ecsa-plan-sub { font-size: 15px; color: __GRAY600__; margin-bottom: 12px; }
+.ecsa-actioncard { border: 1px solid __GRAY200__; border-radius: 12px; padding: 16px 18px; background: __SURFACE__; height: 100%; }
+.ecsa-actioncard.accent { border-left: 4px solid __RED__; }
+.ecsa-actioncard .kick { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: __RED__; }
+.ecsa-actioncard .msg { font-size: 14.5px; color: __GRAY900__; margin: 6px 0 12px 0; }
+.ecsa-actioncard .amt { font-size: 30px; font-weight: 600; color: __RED__; line-height: 1.05; }
+.ecsa-actioncard .amtcap { font-size: 12.5px; color: __GRAY600__; }
+.ecsa-band { display: flex; align-items: baseline; gap: 12px; justify-content: center; flex-wrap: wrap;
+  background: __REDSOFT__; border: 1px solid __RED__; border-radius: 12px; padding: 14px 18px; margin: 10px 0; }
+.ecsa-band .amt { font-size: 30px; font-weight: 700; color: __RED__; }
+.ecsa-band .lbl { font-size: 14px; color: __GRAY900__; }
+.ecsa-band .note { font-size: 12.5px; color: __GRAY600__; }
+.ecsa-closing { font-size: 15.5px; color: __GRAY900__; border-left: 4px solid __RED__;
+  padding: 12px 16px; background: __REDSOFT__; border-radius: 8px; margin-top: 8px; }
+
 .ecsa-caveat { font-size: 12.5px; color: __GRAY600__; }
 </style>
 """
@@ -199,19 +234,27 @@ def stat_chip(icono, valor, etiqueta):
             f'<div><div class="big">{valor}</div><div class="lbl">{etiqueta}</div></div></div>')
 
 
-def time_panel(value, caption, milestones=None, badge=None, sub=None, icon="⏱️"):
+def time_panel(value, caption, milestones=None, band=None, badge=None, sub=None, icon="⏱️"):
     """Panel de reloj para métricas de tiempo: cronómetro (número grande) + mini-timeline
-    opcional (lista de (pct, etiqueta)) + badge opcional + sub-línea. Rojo solo como acento.
+    opcional + banda de ventana opcional (p. ej. 24–72 h, el momento del nudge) + badge + sub.
+    Rojo solo como acento.
 
     milestones: lista de (pct_en_0_100, etiqueta). El relleno llega hasta el último hito.
+    band: (pct_inicio, pct_fin, etiqueta) — resalta una ventana en la línea de tiempo.
     """
     html = ('<div class="ecsa-time">'
             f'<div class="head"><div class="ic">{icon}</div>'
             f'<div><div class="val">{value}</div><div class="cap">{caption}</div></div></div>')
-    if milestones:
-        maxpct = max(p for p, _ in milestones)
-        html += f'<div class="track"><div class="fill" style="width:{maxpct:.1f}%"></div>'
-        for pct, label in milestones:
+    if milestones or band:
+        html += '<div class="track">'
+        if milestones:
+            maxpct = max(p for p, _ in milestones)
+            html += f'<div class="fill" style="width:{maxpct:.1f}%"></div>'
+        if band:
+            b0, b1, blab = band
+            html += (f'<div class="bandwin" style="left:{b0:.1f}%;width:{(b1 - b0):.1f}%"></div>'
+                     f'<div class="bandlbl" style="left:{(b0 + b1) / 2:.1f}%">{blab}</div>')
+        for pct, label in (milestones or []):
             html += (f'<div class="mk" style="left:{pct:.1f}%"></div>'
                      f'<div class="mklbl" style="left:{pct:.1f}%">{label}</div>')
         html += "</div>"
@@ -221,6 +264,49 @@ def time_panel(value, caption, milestones=None, badge=None, sub=None, icon="⏱�
         html += f'<div class="sub">{sub}</div>'
     html += "</div>"
     st.markdown(html, unsafe_allow_html=True)
+
+
+def price_compare_card(best, cheap):
+    """'El precio no es el freno' como tarjeta clara: la categoría con mejor conversión
+    (cara, en rojo) vs la más barata (peor conversión, en gris). best/cheap = dict con
+    keys name, price, conv (ya formateados)."""
+    def _row(d, cls, tag):
+        return (f'<div class="prow {cls}"><span class="cat">{d["name"]}</span>'
+                f'<span class="px">{d["price"]}</span><span class="arrow">→</span>'
+                f'<span class="cv">{d["conv"]}</span><span class="tag">{tag}</span></div>')
+    st.markdown(
+        '<div class="ecsa-pricecard"><div class="title">El precio no es el freno</div>'
+        + _row(best, "best", "mejor conversión")
+        + _row(cheap, "", "la más barata")
+        + '<div class="foot">Las categorías más baratas convierten <b>peor</b>, no mejor.</div></div>',
+        unsafe_allow_html=True,
+    )
+
+
+# ── Plan de acción (cierre) ─────────────────────────────────────────────────────
+def plan_headline(html_amount, subtitle):
+    """Titular grande del cierre (el monto admite <b> para teñir de rojo)."""
+    st.markdown(f'<div class="ecsa-plan-head">{html_amount}</div>'
+                f'<div class="ecsa-plan-sub">{subtitle}</div>', unsafe_allow_html=True)
+
+
+def action_card(kicker, message, amount, amount_caption):
+    """HTML de una tarjeta de acción del Plan (icono/kicker + mensaje + cifra grande USD)."""
+    return (f'<div class="ecsa-actioncard accent"><div class="kick">{kicker}</div>'
+            f'<div class="msg">{message}</div><div class="amt">{amount}</div>'
+            f'<div class="amtcap">{amount_caption}</div></div>')
+
+
+def combined_band(amount, label, note):
+    """Banda de potencial combinado (suma de las dos jugadas) + etiqueta honesta."""
+    st.markdown(f'<div class="ecsa-band"><span class="amt">{amount}</span>'
+                f'<span class="lbl">{label}</span><span class="note">{note}</span></div>',
+                unsafe_allow_html=True)
+
+
+def closing_line(texto):
+    """Cierre en una línea, con acento rojo (acto de habla 'motivar')."""
+    st.markdown(f'<div class="ecsa-closing">{texto}</div>', unsafe_allow_html=True)
 
 
 def caveat(texto):

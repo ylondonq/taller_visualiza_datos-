@@ -77,6 +77,11 @@ def load_price_cat():
 
 
 @st.cache_data(show_spinner=False)
+def load_revenue_cat():
+    return am.load_revenue_cat()
+
+
+@st.cache_data(show_spinner=False)
 def load_anchors():
     return am.load_anchors()
 
@@ -88,6 +93,7 @@ units = load_units()
 occ = load_occasions()
 hourly = load_hourly()
 price_cat = load_price_cat()
+revenue_cat = load_revenue_cat()
 A = load_anchors()
 
 
@@ -164,26 +170,31 @@ k_ras = am.revenue_at_stake(fu)
 k_ds = am.decision_speed(fu)
 k_rec = am.recurrence(fo)
 
-# Cifras-ancla fijas para los títulos-acción (no se mueven con los filtros)
+# Cifras-ancla fijas para los títulos-acción y el Plan (no se mueven con los filtros)
 FOCO_STAKE = A["rev_en_juego_foco"]                       # $2,08 M en electronics
-FOCO_SHARE = FOCO_STAKE / A["rev_en_juego_total"] * 100   # 82% del premio
-RECOVER_10 = FOCO_STAKE * 0.10                            # $207.700/mes (recuperar 10%)
+TOTAL_STAKE = A["rev_en_juego_total"]                     # $2,53 M en juego (total)
+FOCO_SHARE = FOCO_STAKE / TOTAL_STAKE * 100               # 82% del premio
+RECOVER_10 = FOCO_STAKE * 0.10                            # +$207.700/mes (recuperar 10% en electronics)
+GAP_OT_REC = A["ticket_repeat"] - A["ticket_one_time"]    # brecha de ticket one-time -> recurrente
+RETAIN_5 = A["one_time"] * 0.05 * GAP_OT_REC              # +$306.850 (mover 5% de one-time a recurrente)
+COMBINED = RECOVER_10 + RETAIN_5                          # ≈ $514.550 potencial combinado
 
 
 # ── Navegación prominente ─────────────────────────────────────────────────────
-tab_resumen, tab_e1, tab_e2, tab_cuando = st.tabs(
-    ["Resumen", "Estrategia 1 · Conversión", "Estrategia 2 · Retención", "Cuándo activar"]
+tab_resumen, tab_e1, tab_e2, tab_cuando, tab_plan = st.tabs(
+    ["Resumen", "Estrategia 1 · Conversión", "Estrategia 2 · Retención", "Cuándo activar", "Plan de acción"]
 )
 
 
 # ===== RESUMEN (estratégico, cero interacción — test de 30 s) ==================
 with tab_resumen:
     ui.section_header(
-        "¿En qué categoría se nos queda el dinero?",
-        "La respuesta está concentrada en una sola categoría.",
+        "¿Cuáles negocios me dan más ingresos y en cuáles podría tener aún más "
+        "si se concretaran las compras?",
+        "La respuesta es la misma categoría que ya sostiene el negocio.",
     )
     kpis = [
-        ("Revenue en juego", f"{fmt_money_short(k_ras['total_en_juego'])} USD", "carritos abandonados", True),
+        ("Revenue en juego", f"{fmt_money_short(TOTAL_STAKE)} USD", "carritos abandonados", True),
         ("Abandono de carrito", fmt_pct(k_ab["abandono_global"]), "de lo que llega al carrito", False),
         ("Conversión por unidad", fmt_pct(k_ab["gf"]["conv_rate"], 2), "de lo visto se compra", False),
         ("Recurrentes", fmt_pct(k_rec["pct_repeat"]), f"= {fmt_pct(k_rec['pct_rev_repeat'])} del revenue", False),
@@ -193,26 +204,45 @@ with tab_resumen:
         col.markdown(ui.kpi_card(lbl, val, sub, acc), unsafe_allow_html=True)
 
     st.markdown("")
-    hcol, ccol = st.columns([3, 1], gap="large")
-    with hcol:
-        st.plotly_chart(charts.hero_revenue_at_stake(k_ras, foco=FOCO), key="r_hero", width="stretch")
-    with ccol:
-        st.markdown("")
-        ui.callout(fmt_money_short(FOCO_STAKE), f"en juego solo en electronics ({FOCO_SHARE:.0f}% del premio)")
+    # Narrativa en el ORDEN de las dos preguntas: (1) dónde se gana hoy, (2) dónde por recuperar.
+    elec_pct = float(revenue_cat.set_index("category_main").loc[FOCO, "pct"]) \
+        if FOCO in revenue_cat["category_main"].astype(str).tolist() else 0.0
+    q1, q2 = st.columns(2, gap="large")
+    with q1:
+        st.plotly_chart(
+            charts.revenue_share_chart(
+                revenue_cat, foco=FOCO,
+                title=f"1 · Dónde se gana hoy: {FOCO} = {elec_pct:.0f}% de los ingresos"),
+            key="r_revenue_real", width="stretch",
+        )
+    with q2:
+        st.plotly_chart(
+            charts.hero_revenue_at_stake(
+                am.revenue_at_stake(units), foco=FOCO, annotate=False, height=360,
+                title=f"2 · Dónde hay por recuperar: {FOCO} = {FOCO_SHARE:.0f}% ({fmt_money_short(FOCO_STAKE)})"),
+            key="r_revenue_stake", width="stretch",
+        )
+    ui.message_line("Es donde más se gana hoy <b>y</b> donde más hay por recuperar: "
+                    "la misma categoría sostiene el negocio y guarda la mayor oportunidad.")
     ui.glossary_expander()
 
 
 # ===== ESTRATEGIA 1 · CONVERSIÓN (PN1) =========================================
 with tab_e1:
-    ui.message_line("Dónde perdemos la venta y cuánto vale recuperarla.")
+    ui.message_line("¿En qué productos de electrónica y a qué hora vale aumentar la conversión?")
+
+    cf = k_ab["cat_funnel"]
+    elec_cart = int(cf.loc[FOCO, "reached_cart"]) if FOCO in cf.index else 0
+    rc_txt = f"{k_ab['gf']['reached_cart']:,}".replace(",", ".")
+    ec_txt = f"{elec_cart:,}".replace(",", ".")
 
     hcol, scol = st.columns([3, 2], gap="large")
     with hcol:
         st.plotly_chart(
             charts.funnel_chart(
                 k_ab,
-                title=f"Recuperar el 10% de los carritos de electrónica = {fmt_money(RECOVER_10)}/mes",
-                note=f"El {FOCO_SHARE:.0f}% del revenue abandonado está en electronics ({fmt_money_short(FOCO_STAKE)}).",
+                title="1 de cada 3 que llega al carrito no compra: recupéralo",
+                note=f"De los {rc_txt} que llegan al carrito, ~{ec_txt} son de electronics.",
             ),
             key="e1_hero", width="stretch",
         )
@@ -220,22 +250,31 @@ with tab_e1:
         st.markdown("")
         bm = am.brand_mix(fu, foco=FOCO)
         g = bm["g"]
+        # pico de compra de electronics (franja matutina), desde el agregado horario
+        he = hourly[(hourly["category_main"].astype(str) == FOCO)
+                    & (hourly["event_type"].astype(str) == "purchase")]
+        he_h = he.groupby("hour")["n"].sum()
+        elec_peak = int(he_h.idxmax()) if len(he_h) else 7
         if len(g) and bm["n_total"]:
             gg = g.sort_values("carritos", ascending=False)
             top2 = gg.head(2)
-            share = top2["carritos"].sum() / bm["n_total"] * 100
+            share2 = top2["carritos"].sum() / bm["n_total"] * 100
             names = " + ".join(str(b).title() for b in top2.index)
-            top_brand = str(gg.index[0]).title()
-            top_ticket = float(gg.iloc[0]["ticket"])
-            st.markdown(ui.stat_chip("🛒", fmt_pct(share, 0), f"de los carritos: {names}"),
+            tk_brand = str(gg["ticket"].idxmax()).title()
+            tk_val = float(gg["ticket"].max())
+            st.markdown(ui.stat_chip("🛒", fmt_pct(share2, 0), f"de los carritos: {names}"),
                         unsafe_allow_html=True)
             st.markdown("")
-            st.markdown(ui.stat_chip("🏷️", fmt_money(top_ticket), f"ticket medio · {top_brand}"),
+            st.markdown(ui.stat_chip("🏷️", fmt_money(tk_val), f"mayor ticket · {tk_brand}"),
+                        unsafe_allow_html=True)
+            st.markdown("")
+            st.markdown(ui.stat_chip("⏱️", f"{elec_peak}h", "pico de compra de electronics (6–10 h)"),
                         unsafe_allow_html=True)
         else:
             st.info(f"Sin marcas con volumen suficiente en {FOCO} para el filtro actual.")
 
-    ui.action_chip("Incentivo de cierre inmediato/en pantalla, en la franja matutina.", icon="🎯")
+    ui.action_chip("Recordatorio de carrito a Apple y Samsung con cierre inmediato "
+                   "(urgencia/stock, financiación), en la franja matutina (pico 7h).", icon="🎯")
 
     with st.expander("Ver detalle analítico"):
         d1, d2 = st.columns(2)
@@ -251,13 +290,9 @@ with tab_e1:
 # ===== ESTRATEGIA 2 · RETENCIÓN (PN2) ==========================================
 with tab_e2:
     rt = am.repurchase_timing(fo)
-    ratio = (k_rec["ticket_repeat"] / k_rec["ticket_one_time"]
-             if k_rec["ticket_one_time"] else float("nan"))
-    ratio_txt = f"{ratio:.1f}×".replace(".", ",") if ratio == ratio else "—"
     ui.message_line(
         f"El {fmt_pct(k_rec['pct_repeat'])} de los compradores trae el "
-        f"{fmt_pct(k_rec['pct_rev_repeat'])} del revenue — ticket {ratio_txt} "
-        f"({fmt_money(k_rec['ticket_repeat'])} vs {fmt_money(k_rec['ticket_one_time'])})."
+        f"{fmt_pct(k_rec['pct_rev_repeat'])} del revenue."
     )
 
     if k_rec["repeat"] > 0:
@@ -271,18 +306,23 @@ with tab_e2:
         with tcol:
             st.markdown("")
             days = rt["days"]
-            milestones = None
+            milestones, sub = None, None
             if len(days):
                 p1 = float((days <= 1).mean() * 100)
                 p7 = float((days <= 7).mean() * 100)
-                milestones = [(100 * 1 / 14, f"1 día · {p1:.0f}%"), (100 * 7 / 14, f"7 días · {p7:.0f}%")]
+                p14 = float((days <= 14).mean() * 100)
+                milestones = [(100 / 14, f"1 día · {p1:.0f}%"), (700 / 14, f"7 días · {p7:.0f}%")]
+                sub = f"{p14:.0f}% vuelve en ≤14 días"
+            # "¿cuándo vuelve?": timeline 0→14 d con la ventana del nudge 24–72 h resaltada
             ui.time_panel(
                 value=_days_txt(rt["median_days"]),
-                caption="mediana hasta la 2ª compra",
-                milestones=milestones,
-                badge=f"{fmt_pct(rt['same_pct'])} vuelve a la misma categoría"
-                      if rt["same_pct"] == rt["same_pct"] else None,
+                caption="¿cuándo vuelve? · mediana a la 2ª compra",
+                milestones=milestones, band=(100 / 14, 300 / 14, "nudge 24–72 h"), sub=sub,
             )
+            st.markdown("")
+            # "¿a qué vuelve?": número grande de misma-categoría
+            if rt["same_pct"] == rt["same_pct"]:
+                ui.callout(fmt_pct(rt["same_pct"]), "¿a qué vuelve? — la misma categoría 🔁")
     else:
         st.info("Sin compradores recurrentes en el filtro actual (prueba 'Segmento = Todos').")
 
@@ -302,35 +342,66 @@ with tab_e2:
 # ===== CUÁNDO ACTIVAR (PN3) ====================================================
 with tab_cuando:
     hi = am.hourly_intensity(fh)
-    peak_h = int(hi["compras_x100_vistas"].idxmax()) if len(hi) else 0
-    ui.message_line(f"La mañana convierte ~2× por visita (pico {peak_h}h).")
+    pc = am.price_vs_conversion(fu, price_cat)
+    ui.message_line("La mañana convierte ~2× por visita: concentra el incentivo en la franja 6–10 h.")
 
     if len(hi):
-        hcol, tcol = st.columns([3, 2], gap="large")
+        hcol, scol = st.columns([3, 2], gap="large")
         with hcol:
             st.plotly_chart(charts.hourly_intensity_hero(hi), key="c_hero", width="stretch")
-        with tcol:
+        with scol:
+            # "El precio no es el freno" — evidencia del 'con qué' (no precio), con relevancia.
+            if len(pc) and FOCO in pc.index:
+                cheap_cat = pc["precio_mediana"].idxmin()
+                best = {"name": FOCO.title(), "price": fmt_money(pc.loc[FOCO, "precio_mediana"]),
+                        "conv": fmt_pct(pc.loc[FOCO, "conv_rate"], 2)}
+                cheap = {"name": str(cheap_cat).title(), "price": fmt_money(pc.loc[cheap_cat, "precio_mediana"]),
+                         "conv": fmt_pct(pc.loc[cheap_cat, "conv_rate"], 2)}
+                ui.price_compare_card(best, cheap)
+            else:
+                ui.caveat("Sin categorías con ≥500 unidades para comparar precio vs conversión.")
             st.markdown("")
-            ui.time_panel(
-                value=_min_txt(k_ds["median_min"]),
-                caption="mediana de decisión (1er view → compra)",
-                sub=f"{fmt_pct(k_ds['pct_lt5'])} decide en menos de 5 min",
-            )
+            ui.time_panel(value=_min_txt(k_ds["median_min"]), caption="decisión: 1er view → compra",
+                          sub=f"{fmt_pct(k_ds['pct_lt5'])} decide en menos de 5 min")
     else:
         st.info("Sin eventos para la franja/filtro actual.")
 
-    ui.action_chip("Activa 6–10 h con incentivo inmediato/en pantalla; el precio no es el freno.",
-                   icon="🎯")
+    ui.action_chip("Activa en la franja 6–10 h con incentivo inmediato/en pantalla; "
+                   "el precio no es el freno.", icon="🎯")
 
     with st.expander("Ver detalle analítico"):
-        if len(hi):
-            st.plotly_chart(charts.hourly_intensity_chart(hi), key="c_hourly_detail", width="stretch")
         d1, d2 = st.columns(2)
         with d1:
             st.plotly_chart(charts.decision_speed_chart(k_ds), key="c_speed", width="stretch")
         with d2:
-            pc = am.price_vs_conversion(fu, price_cat)
             if len(pc):
                 st.plotly_chart(charts.price_vs_conversion_chart(pc, foco=FOCO), key="c_price", width="stretch")
             else:
                 st.info("No hay categorías con ≥500 unidades en el filtro actual.")
+
+
+# ===== PLAN DE ACCIÓN (cierre que motiva — acto de habla, §3.5) ================
+with tab_plan:
+    ui.plan_headline(
+        f"Hay <b>{fmt_money_short(TOTAL_STAKE)} USD</b> sobre la mesa — y casi todo está en electrónica.",
+        f"Electronics = {FOCO_SHARE:.0f}% del revenue abandonado ({fmt_money_short(FOCO_STAKE)}). "
+        "Dos jugadas, una sola categoría. Esto es lo que recuperamos:",
+    )
+    p1, p2 = st.columns(2, gap="large")
+    p1.markdown(
+        ui.action_card(
+            "Estrategia 1 · Recuperar",
+            "Carritos de Apple y Samsung, cierre inmediato en la mañana.",
+            f"+{fmt_money(RECOVER_10)}", "/ mes — recuperando el 10% de lo abandonado en electronics"),
+        unsafe_allow_html=True)
+    p2.markdown(
+        ui.action_card(
+            "Estrategia 2 · Retener",
+            "Nudge de recompra a 24–72 h, en la misma categoría.",
+            f"+{fmt_money(RETAIN_5)}", "moviendo el 5% de los compradores de una vez al núcleo recurrente"),
+        unsafe_allow_html=True)
+    ui.combined_band(f"≈ {fmt_money(COMBINED)} USD", "potencial combinado",
+                     "(en la muestra del 2,3% de octubre)")
+    ui.closing_line(
+        "No es venderle más a todos: es recuperar lo que ya casi compraste y cuidar a quien "
+        "ya vuelve. Las dos jugadas están en electrónica. <b>Empecemos por ahí.</b>")

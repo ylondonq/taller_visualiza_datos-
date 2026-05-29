@@ -41,4 +41,5 @@ Thumbs.db
 !data/processed/agg_occasions.parquet
 !data/processed/agg_hourly.parquet
 !data/processed/agg_price_cat.parquet
+!data/processed/agg_revenue_cat.parquet
 !data/processed/agg_anchors.parquet

@@ -100,6 +100,17 @@ def main():
     chk_series("price.conv_rate", pc1["conv_rate"], pc0["conv_rate"])
     chk_series("price.precio_mediana", pc1["precio_mediana"], pc0["precio_mediana"])
 
+    # ── Revenue real por categoría (ingresos de hoy) ──
+    rc = agg_metrics.load_revenue_cat()
+    rc1 = rc.set_index("category_main")["revenue"]
+    rc1.index = rc1.index.astype(object)
+    purch = df[df["event_type"] == "purchase"]
+    rc0 = purch.groupby("category_main")["price"].sum()
+    chk_series("revenue_cat.revenue", rc1, rc0)
+    elec_pct_agg = float(rc.set_index("category_main").loc["electronics", "pct"])
+    elec_pct_gt = float(rc0.loc["electronics"] / purch["price"].sum() * 100)
+    chk("revenue_cat.electronics_pct", elec_pct_agg, elec_pct_gt)
+
     # ── Anclas (titular) vs metrics directo ──
     chk("anchor.abandono_global", anchors["abandono_global"], ab0["abandono_global"])
     chk("anchor.conv_global", anchors["conv_global"], ab0["gf"]["conv_rate"])
@@ -108,6 +119,7 @@ def main():
     chk("anchor.median_min", anchors["median_min"], ds0["median_min"])
     chk("anchor.median_days", anchors["median_days"], rt0["median_days"])
     chk("anchor.same_pct", anchors["same_pct"], rt0["same_pct"])
+    chk("anchor.one_time", anchors["one_time"], r0["one_time"])
 
     # ── Reporte ──
     n_ok = sum(1 for _, ok, *_ in results if ok)

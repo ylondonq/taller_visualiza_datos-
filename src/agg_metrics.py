@@ -29,6 +29,7 @@ AGG_UNITS = config.DATA_PROCESSED / "agg_units.parquet"
 AGG_OCCASIONS = config.DATA_PROCESSED / "agg_occasions.parquet"
 AGG_HOURLY = config.DATA_PROCESSED / "agg_hourly.parquet"
 AGG_PRICE_CAT = config.DATA_PROCESSED / "agg_price_cat.parquet"
+AGG_REVENUE_CAT = config.DATA_PROCESSED / "agg_revenue_cat.parquet"
 AGG_ANCHORS = config.DATA_PROCESSED / "agg_anchors.parquet"
 
 
@@ -47,6 +48,10 @@ def load_hourly():
 
 def load_price_cat():
     return pd.read_parquet(AGG_PRICE_CAT)
+
+
+def load_revenue_cat():
+    return pd.read_parquet(AGG_REVENUE_CAT)
 
 
 def load_anchors():
