@@ -23,7 +23,7 @@ import plotly.graph_objects as go
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import theme  # noqa: E402
 from theme import (  # noqa: E402
-    BRAND_RED, GRAY_900, GRAY_600, GRAY_400, GRAY_200,
+    BRAND_RED, BRAND_GREEN, GRAY_900, GRAY_600, GRAY_400, GRAY_200,
     fmt_money, fmt_money_short, fmt_pct, fmt_int,
 )
 
@@ -38,7 +38,8 @@ def revenue_share_chart(rev_cat, foco="electronics", title=None, top_n=6, height
     rc = rev_cat.sort_values("revenue", ascending=False).head(top_n).iloc[::-1]
     cats = [str(c) for c in rc["category_main"]]
     vals = rc["pct"].tolist()
-    colors = [BRAND_RED if c == foco else CTX_BG for c in cats]
+    # VERDE para el foco: son ingresos REALES (ganancia positiva), no dinero en riesgo.
+    colors = [BRAND_GREEN if c == foco else CTX_BG for c in cats]
     fig = theme.base_fig()
     fig.add_bar(
         x=vals, y=cats, orientation="h", marker_color=colors, customdata=cats,
@@ -301,14 +302,16 @@ def decision_speed_chart(ds, cap_min=30):
 
 # ── Precio vs conversión (PN3) ────────────────────────────────────────────────
 def price_vs_conversion_chart(pc, foco="electronics"):
-    """Scatter precio mediana por categoría vs conversión; el precio no es el freno."""
+    """Scatter precio mediana por categoría vs conversión; el precio no es el freno.
+    Electronics en VERDE y con bola más grande: es la mejor conversión (ganancia positiva)."""
     cats = list(pc.index)
-    colors = [BRAND_RED if c == foco else CTX for c in cats]
+    colors = [BRAND_GREEN if c == foco else CTX for c in cats]
+    sizes = [20 if c == foco else 11 for c in cats]
     fig = theme.base_fig()
     fig.add_scatter(
         x=pc["precio_mediana"], y=pc["conv_rate"], mode="markers+text",
         text=cats, textposition="top center", textfont=dict(size=11, color=GRAY_600),
-        marker=dict(size=12, color=colors), customdata=cats,
+        marker=dict(size=sizes, color=colors), customdata=cats,
         hovertemplate="%{customdata}<br>precio mediana %{x:$,.0f}<br>conv %{y:.2f}%<extra></extra>",
     )
     fig.update_layout(

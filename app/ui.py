@@ -133,11 +133,11 @@ header[data-testid="stHeader"] { background: transparent; height: 0; }
 .ecsa-pricecard .prow { display: flex; align-items: baseline; gap: 8px; padding: 7px 0; border-bottom: 1px solid __GRAY100__; }
 .ecsa-pricecard .prow:last-of-type { border-bottom: none; }
 .ecsa-pricecard .cat { width: 96px; font-weight: 500; color: __GRAY600__; }
-.ecsa-pricecard .prow.best .cat { color: __RED__; }
+.ecsa-pricecard .prow.best .cat { color: __GREEN__; }
 .ecsa-pricecard .px { color: __GRAY600__; font-size: 13.5px; }
 .ecsa-pricecard .arrow { color: __GRAY400__; }
 .ecsa-pricecard .cv { font-size: 18px; font-weight: 600; color: __GRAY900__; }
-.ecsa-pricecard .prow.best .cv { color: __RED__; }
+.ecsa-pricecard .prow.best .cv { color: __GREEN__; }
 .ecsa-pricecard .tag { margin-left: auto; font-size: 12px; color: __GRAY600__; }
 .ecsa-pricecard .foot { font-size: 13px; color: __GRAY900__; margin-top: 10px; }
 
@@ -167,7 +167,7 @@ header[data-testid="stHeader"] { background: transparent; height: 0; }
 def _css():
     repl = {
         "__FONT__": theme.FONT_STACK, "__BG__": theme.BG, "__SURFACE__": theme.SURFACE,
-        "__RED__": theme.BRAND_RED, "__REDSOFT__": theme.RED_SOFT,
+        "__RED__": theme.BRAND_RED, "__REDSOFT__": theme.RED_SOFT, "__GREEN__": theme.BRAND_GREEN,
         "__GRAY900__": theme.GRAY_900, "__GRAY600__": theme.GRAY_600,
         "__GRAY200__": theme.GRAY_200, "__GRAY100__": theme.GRAY_100,
     }

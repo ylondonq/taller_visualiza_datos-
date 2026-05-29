@@ -1,11 +1,12 @@
 """
 app/theme.py — Sistema de diseño (tokens) y plantilla Plotly del dashboard E-commerce SA.
 
-REGLA DE COLOR (no negociable, §3.2 atributos preatentivos / §3.4 gramática visual):
-  En TODO el app, el color saturado (BRAND_RED) se reserva para "lo que importa" —el
-  elemento que el gerente debe mirar primero—. Todo lo demás (contexto) va en la escala
-  de GRISES. NO hay un segundo color de acento: nada de azul/verde decorativos. Si dos
-  series compiten, se separan por luminosidad de gris, no por matiz.
+REGLA DE COLOR (§3.2 atributos preatentivos / §3.4 gramática visual):
+  El contexto va siempre en la escala de GRISES. Hay DOS acentos, con semántica fija (no
+  decorativa): ROJO (BRAND_RED) = dinero en RIESGO / perdido / lo que hay que actuar
+  (revenue en juego, abandono, franja a activar); VERDE (BRAND_GREEN) = ganancia REAL /
+  positiva (los ingresos de hoy y la categoría que mejor convierte: electronics). Nada de
+  azul. Si dos series compiten en un mismo gráfico, se separan por luminosidad de gris.
 
 Tipografía (§3.4 jerarquía): una sola familia sans del sistema, dos pesos (400 regular,
 500 medio). Tamaños: título 22, subtítulo 18, cuerpo 15–16.
@@ -17,8 +18,10 @@ import plotly.graph_objects as go
 import plotly.io as pio
 
 # ── Tokens de diseño ───────────────────────────────────────────────────────────
-BRAND_RED = "#C8102E"   # rojo institucional E-commerce SA — ÚNICO acento
+BRAND_RED = "#C8102E"   # rojo institucional E-commerce SA — acento de RIESGO/pérdida (lo a actuar)
 RED_SOFT = "#FBEAEC"    # rojo muy diluido para fondos de realce (banners/insight)
+BRAND_GREEN = "#2E7D32" # verde — ganancia REAL/positiva (electronics como ingreso de hoy)
+GREEN_SOFT = "#E8F3EC"  # verde muy diluido para fondos
 
 # Escala de grises (de oscuro a claro). El contexto vive aquí.
 GRAY_900 = "#1F2328"    # texto principal / títulos
