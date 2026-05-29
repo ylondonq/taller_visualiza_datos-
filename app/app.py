@@ -25,6 +25,7 @@ la marca no entra en el agregado horario; recurrencia/timing por categoría domi
 
 Ejecutar:  .venv\\Scripts\\python.exe -m streamlit run app/app.py
 """
+import importlib
 import sys
 from pathlib import Path
 
@@ -35,8 +36,18 @@ _ROOT = _APP_DIR.parent
 sys.path.append(str(_ROOT))
 sys.path.insert(0, str(_APP_DIR))
 from src import agg_metrics as am  # noqa: E402
-import charts  # noqa: E402
+import theme  # noqa: E402
 import ui  # noqa: E402
+import charts  # noqa: E402
+
+# Streamlit Community Cloud, tras un redeploy "en caliente" (git pull sin reiniciar el
+# proceso), puede dejar en sys.modules una versión CACHEADA de estos módulos hermanos
+# (los importamos vía sys.path, no como paquete, así que su watcher no siempre los recarga).
+# Eso provoca AttributeError al usar código nuevo (p. ej. ui.about_data_expander) contra un
+# módulo viejo. Forzamos recarga del archivo recién clonado en cada arranque para auto-curar
+# el deploy. Orden: theme primero (ui/charts dependen de él). Coste despreciable.
+for _m in (theme, ui, charts, am):
+    importlib.reload(_m)
 from theme import fmt_money, fmt_money_short, fmt_pct  # noqa: E402
 
 st.set_page_config(page_title="E-commerce SA — Inteligencia de conversión", page_icon="🛒", layout="wide")
