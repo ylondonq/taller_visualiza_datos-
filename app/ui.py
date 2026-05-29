@@ -162,6 +162,12 @@ header[data-testid="stHeader"] { background: transparent; height: 0; }
 .ecsa-closing { font-size: 15.5px; color: __GRAY900__; border-left: 4px solid __RED__;
   padding: 12px 16px; background: __REDSOFT__; border-radius: 8px; margin-top: 8px; }
 
+/* Hipótesis a validar (puente a la decisión basada en datos: uplift / A-B test) */
+.ecsa-hypo { border: 1px solid __GRAY200__; border-left: 4px solid __GRAY400__; border-radius: 10px;
+  padding: 13px 16px; margin-top: 16px; background: __GRAY100__; }
+.ecsa-hypo .lbl { font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: __GRAY600__; margin-bottom: 4px; }
+.ecsa-hypo .txt { font-size: 14px; color: __GRAY900__; line-height: 1.5; }
+
 .ecsa-caveat { font-size: 12.5px; color: __GRAY600__; }
 </style>
 """
@@ -313,6 +319,13 @@ def combined_band(amount, label, note):
 def closing_line(texto):
     """Cierre en una línea, con acento rojo (acto de habla 'motivar')."""
     st.markdown(f'<div class="ecsa-closing">{texto}</div>', unsafe_allow_html=True)
+
+
+def hypothesis_block(texto, label="🧪 Hipótesis a validar"):
+    """Hipótesis verificable de cierre (marco del curso: de hallazgo → decisión basada en
+    datos; el plan se prueba con un A/B test midiendo el uplift, no la conversión total)."""
+    st.markdown(f'<div class="ecsa-hypo"><div class="lbl">{label}</div>'
+                f'<div class="txt">{texto}</div></div>', unsafe_allow_html=True)
 
 
 def caveat(texto):

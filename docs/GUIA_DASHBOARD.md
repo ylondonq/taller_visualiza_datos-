@@ -90,7 +90,13 @@ Lectura de color: el **problema en rojo** arriba → las **ganancias en verde** 
     **+$207.700 / mes** (recuperando el 10% de lo abandonado en electronics).
   - **Estrategia 2 · Retener** — nudge de recompra 24–72 h, misma categoría → **+$306.850**
     (moviendo el 5% de los compradores de una vez al núcleo recurrente).
-- Sin más texto: headline + dos tarjetas (cierre limpio, test de 30 s).
+- **Hipótesis a validar (cierre, marco del curso):** *si concentramos el incentivo donde ya
+  hay señal (carritos de electrónica = intención; recurrentes = lealtad) en su momento de mayor
+  propensión (mañana 6–10 h; recompra 24–72 h), entonces subiremos conversión y recompra sin
+  erosionar margen, porque el incentivo va a quien casi compra o ya vuelve, no a quien compraría
+  igual.* **Validación:** A/B test (tratado vs. control) midiendo el **uplift** incremental, no la
+  conversión total. (Conecta el tablero con el proyecto integrador: propensión + uplift.)
+- Layout: headline + dos tarjetas + hipótesis (cierre limpio, test de 30 s).
 
 ---
 

@@ -421,3 +421,12 @@ with tab_plan:
             "Nudge de recompra a 24–72 h, en la misma categoría.",
             f"+{fmt_money(RETAIN_5)}", "moviendo el 5% de los compradores de una vez al núcleo recurrente"),
         unsafe_allow_html=True)
+    # Cierre del arco: hipótesis verificable (curso: de hallazgo → decisión; uplift / A-B test).
+    ui.hypothesis_block(
+        "<b>Si</b> concentramos el incentivo donde ya hay señal —carritos de electrónica "
+        "(intención) y compradores recurrentes (lealtad)— en su momento de mayor propensión "
+        "(mañana 6–10 h; recompra 24–72 h), <b>entonces</b> subiremos conversión y recompra "
+        "<b>sin erosionar margen</b>, porque el incentivo va a quien <i>casi</i> compra o ya "
+        "vuelve, no a quien compraría igual. <b>Cómo validarlo:</b> un A/B test (grupo tratado "
+        "vs. control) que mida el <i>uplift</i> incremental, no la conversión total."
+    )
