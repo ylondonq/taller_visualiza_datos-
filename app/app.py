@@ -211,8 +211,7 @@ tab_resumen, tab_e1, tab_e2, tab_cuando, tab_plan = st.tabs(
 # ===== RESUMEN (estratégico, cero interacción — test de 30 s) ==================
 with tab_resumen:
     ui.section_header(
-        "¿Cuáles negocios me dan más ingresos y en cuáles podría tener aún más "
-        "si se concretaran las compras?",
+        "¿Dónde ganamos hoy y dónde podríamos ganar más?",
         "La respuesta es la misma categoría que ya sostiene el negocio.",
     )
     # Tono semántico: rojo = dinero en riesgo (a actuar); verde = valor real/positivo; gris = neutro.

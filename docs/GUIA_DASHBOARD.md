@@ -31,8 +31,7 @@ recurrente (después). Narrativa de las pestañas: **Resumen (dónde) → Estrat
 
 ## 1. Resumen  (pestaña estratégica — test de 30 s, sin interacción)
 Responde **dos preguntas** en orden, con la misma categoría como respuesta a ambas:
-- **Título:** *"¿Cuáles negocios me dan más ingresos y en cuáles podría tener aún más si se
-  concretaran las compras?"*
+- **Título:** *"¿Dónde ganamos hoy y dónde podríamos ganar más?"*
 - **Gráfico 1 — ¿Dónde se gana hoy?** Barras horizontales de **ingresos reales por categoría**
   (`% del revenue`). **Electronics en verde 🟢 = 78%** de los ingresos (appliances 5,5%, computers
   4,3%; top-3 ≈ 88%). Fuente: `agg_revenue_cat`.
