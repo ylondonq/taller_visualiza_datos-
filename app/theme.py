@@ -1,50 +1,83 @@
 """
-app/theme.py — Plantilla Plotly y helpers de formato para el dashboard.
+app/theme.py — Sistema de diseño (tokens) y plantilla Plotly del dashboard E-commerce SA.
 
-Principios del curso aplicados:
-  - Data-to-Ink: fondo limpio, sin grillas pesadas ni bordes.
-  - Atributo preatentivo de color: gris neutro para el contexto, UN color fuerte (rojo)
-    solo para el elemento crítico (electronics / recurrentes / mediana).
-  - Jerarquía tipográfica: título oscuro, anotaciones secundarias en gris.
+REGLA DE COLOR (no negociable, §3.2 atributos preatentivos / §3.4 gramática visual):
+  En TODO el app, el color saturado (BRAND_RED) se reserva para "lo que importa" —el
+  elemento que el gerente debe mirar primero—. Todo lo demás (contexto) va en la escala
+  de GRISES. NO hay un segundo color de acento: nada de azul/verde decorativos. Si dos
+  series compiten, se separan por luminosidad de gris, no por matiz.
+
+Tipografía (§3.4 jerarquía): una sola familia sans del sistema, dos pesos (400 regular,
+500 medio). Tamaños: título 22, subtítulo 18, cuerpo 15–16.
+
+Principios: Data-to-Ink (§3.1) fondos limpios sin grilla/borde; jerarquía tipográfica
+(título oscuro, secundario gris).
 """
 import plotly.graph_objects as go
 import plotly.io as pio
 
-# ── Paleta ────────────────────────────────────────────────────────────────────
-GREY = "#b0b0b0"    # contexto / "el resto"
-CRIT = "#d62728"    # rojo: elemento crítico (lo único que debe saltar a la vista)
-ACCENT = "#1f77b4"  # azul de apoyo (compras / valor)
-GREEN = "#2ca02c"   # ok / recuperado
-DARK = "#2c2c2c"    # texto de títulos
-MUTED = "#6b6b6b"   # texto secundario
+# ── Tokens de diseño ───────────────────────────────────────────────────────────
+BRAND_RED = "#C8102E"   # rojo institucional E-commerce SA — ÚNICO acento
+RED_SOFT = "#FBEAEC"    # rojo muy diluido para fondos de realce (banners/insight)
+
+# Escala de grises (de oscuro a claro). El contexto vive aquí.
+GRAY_900 = "#1F2328"    # texto principal / títulos
+GRAY_600 = "#57606A"    # texto secundario
+GRAY_400 = "#8C959F"    # series de contexto en gráficos
+GRAY_200 = "#D0D7DE"    # líneas/bordes sutiles, "el resto" claro
+GRAY_100 = "#F4F6F8"    # superficies / fondos de tarjeta
+
+BG = "#FFFFFF"          # fondo del lienzo
+SURFACE = "#FFFFFF"     # superficie de tarjetas
+TEXT = GRAY_900
+MUTED = GRAY_600
+
+FONT_STACK = "'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif"
+
+# Tamaños tipográficos (px)
+SIZE_TITLE = 22
+SIZE_SUBTITLE = 18
+SIZE_BODY = 15
+
+# ── Alias de compatibilidad usados por app/charts.py ───────────────────────────
+# (charts.py se escribe ya con la disciplina de un solo acento: rojo = resaltar,
+#  grises = contexto; estos alias mapean a los tokens nuevos).
+CRIT = BRAND_RED        # el elemento crítico (lo único que salta a la vista)
+GREY = GRAY_400         # contexto / "el resto"
+GREY_LIGHT = GRAY_200   # contexto aún más al fondo
+DARK = GRAY_900         # texto de títulos
+# MUTED ya definido arriba (texto secundario)
 
 # ── Plantilla Plotly registrada como "taller" ──────────────────────────────────
 _template = go.layout.Template()
 _template.layout = go.Layout(
-    font=dict(family="Segoe UI, Arial, sans-serif", size=14, color=DARK),
-    title=dict(font=dict(size=18, color=DARK), x=0.0, xanchor="left"),
-    paper_bgcolor="white",
-    plot_bgcolor="white",
-    colorway=[ACCENT, CRIT, GREY, GREEN, "#9467bd", "#8c564b"],
-    xaxis=dict(showgrid=False, zeroline=False, showline=True, linecolor="#e0e0e0", ticks="outside", tickcolor="#e0e0e0"),
-    yaxis=dict(showgrid=False, zeroline=False, showline=False),
-    margin=dict(l=10, r=20, t=60, b=40),
-    legend=dict(bgcolor="rgba(0,0,0,0)", borderwidth=0),
-    hoverlabel=dict(font_size=13, font_family="Segoe UI, Arial, sans-serif"),
+    font=dict(family=FONT_STACK, size=14, color=GRAY_900),
+    title=dict(font=dict(size=SIZE_SUBTITLE, color=GRAY_900), x=0.0, xanchor="left"),
+    paper_bgcolor="rgba(0,0,0,0)",
+    plot_bgcolor="rgba(0,0,0,0)",
+    # colorway en grises + rojo: el rojo solo aparece donde se asigna explícitamente.
+    colorway=[GRAY_400, BRAND_RED, GRAY_200, GRAY_600],
+    xaxis=dict(showgrid=False, zeroline=False, showline=True, linecolor=GRAY_200,
+               ticks="outside", tickcolor=GRAY_200, tickfont=dict(color=GRAY_600)),
+    yaxis=dict(showgrid=False, zeroline=False, showline=False, tickfont=dict(color=GRAY_600)),
+    margin=dict(l=10, r=20, t=56, b=40),
+    legend=dict(bgcolor="rgba(0,0,0,0)", borderwidth=0, font=dict(color=GRAY_600)),
+    hoverlabel=dict(font_size=13, font_family=FONT_STACK, bgcolor="white",
+                    bordercolor=GRAY_200, font_color=GRAY_900),
 )
 pio.templates["taller"] = _template
 
 
 def base_fig():
-    """Devuelve una figura vacía con la plantilla del taller aplicada."""
+    """Figura vacía con la plantilla del taller (fondo transparente, sin grilla)."""
     fig = go.Figure()
     fig.update_layout(template="taller")
     return fig
 
 
-# ── Helpers de formato ──────────────────────────────────────────────────────────
+# ── Helpers de formato (es-CO: coma decimal) ────────────────────────────────────
 def fmt_money(x, decimals=0):
-    """Formatea un monto en USD, con separador de miles. Ej: 2076999 -> '$2,076,999'."""
+    """Monto en USD con separador de miles. Ej: 2076999 -> '$2,076,999'."""
     try:
         return f"${x:,.{decimals}f}"
     except (TypeError, ValueError):
@@ -52,7 +85,7 @@ def fmt_money(x, decimals=0):
 
 
 def fmt_money_short(x):
-    """Monto compacto para titulares. Ej: 2076999 -> '$2,08 M' (estilo es-CO)."""
+    """Monto compacto para titulares. Ej: 2076999 -> '$2,08 M'."""
     try:
         if abs(x) >= 1_000_000:
             return f"${x/1_000_000:.2f} M".replace(".", ",")
@@ -64,7 +97,7 @@ def fmt_money_short(x):
 
 
 def fmt_pct(x, decimals=1):
-    """Formatea un porcentaje. Ej: 32.4 -> '32,4%' (coma decimal)."""
+    """Porcentaje con coma decimal. Ej: 32.4 -> '32,4%'."""
     try:
         return f"{x:.{decimals}f}%".replace(".", ",")
     except (TypeError, ValueError):

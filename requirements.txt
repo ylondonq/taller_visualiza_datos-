@@ -14,7 +14,7 @@ seaborn>=0.13
 plotly>=5.18         # gráficas aclaratorias (Fase II)
 
 # Dashboard
-streamlit>=1.30
+streamlit>=1.35    # on_select="rerun" en st.plotly_chart (cross-filter estilo Power BI)
 
 # Notebook / higiene de git para el equipo
 jupyter

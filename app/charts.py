@@ -1,10 +1,19 @@
 """
-app/charts.py — Figuras Plotly del dashboard (Fase III).
+app/charts.py — Figuras Plotly del dashboard (E-commerce SA).
 
-Cada función recibe los agregados de src.metrics y devuelve un go.Figure listo para
-st.plotly_chart. Reconstruye en Plotly nativo los héroes A y B de la Fase II (no incrusta
-los PNG de matplotlib) y el resto de gráficos de soporte. Aplica la plantilla 'taller'
-(gris para contexto, rojo solo para lo crítico).
+Cada función recibe los agregados de src.agg_metrics y devuelve un go.Figure listo para
+st.plotly_chart. Reconstruye en Plotly nativo los héroes A y B y el resto de gráficos de
+soporte.
+
+DISCIPLINA DE COLOR (§3.2 atributos preatentivos / §3.4 gramática visual): el ÚNICO acento
+es BRAND_RED, reservado para el elemento a resaltar (electronics / recurrentes / pico / lo
+que se pierde). Todo el contexto va en grises (más claro = más al fondo). NO hay verde ni
+azul: si dos series compiten, se separan por luminosidad de gris, no por matiz. Títulos
+autoexplicativos orientados a acción (§3.5).
+
+Las gráficas con dimensión de categoría (revenue por categoría, abandono por categoría,
+precio vs conversión) llevan `customdata` con la categoría para alimentar el cross-filter
+estilo Power BI del app (selección -> filtra el resto de la pestaña).
 """
 import sys
 from pathlib import Path
@@ -12,26 +21,32 @@ from pathlib import Path
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-# Importa theme como módulo hermano (la carpeta 'app' y el script 'app.py' chocan de
-# nombre, así que no usamos 'from app import theme'); aseguramos app/ en el path.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import theme  # noqa: E402
-from theme import GREY, CRIT, ACCENT, GREEN, MUTED, fmt_money, fmt_money_short, fmt_pct, fmt_int  # noqa: E402
+from theme import (  # noqa: E402
+    BRAND_RED, GRAY_900, GRAY_600, GRAY_400, GRAY_200,
+    fmt_money, fmt_money_short, fmt_pct, fmt_int,
+)
+
+CTX = GRAY_400        # contexto principal (series "el resto")
+CTX_BG = GRAY_200     # contexto al fondo (lo menos importante)
 
 
 # ── Héroe A (PN1): revenue en juego por categoría ─────────────────────────────
 def hero_revenue_at_stake(ras, foco="electronics"):
-    """Barras horizontales del revenue abandonado por categoría; foco resaltado en rojo."""
-    prize = ras["prize"].sort_values("revenue_en_juego")  # menor->mayor (mayor arriba en barh)
+    """Barras horizontales del revenue abandonado por categoría; foco en rojo, resto gris."""
+    prize = ras["prize"].sort_values("revenue_en_juego")  # menor->mayor (mayor arriba)
     cats = list(prize.index)
     vals = prize["revenue_en_juego"].tolist()
-    colors = [CRIT if c == foco else GREY for c in cats]
+    colors = [BRAND_RED if c == foco else CTX_BG for c in cats]
 
     fig = theme.base_fig()
     fig.add_bar(
         x=vals, y=cats, orientation="h", marker_color=colors,
+        customdata=cats,
         text=[fmt_money_short(v) for v in vals], textposition="outside",
-        hovertemplate="%{y}: %{x:$,.0f} en juego<extra></extra>",
+        textfont=dict(color=GRAY_600),
+        hovertemplate="%{customdata}: %{x:$,.0f} en juego<extra></extra>",
     )
     top = prize["revenue_en_juego"].max()
     fig.update_layout(
@@ -43,8 +58,8 @@ def hero_revenue_at_stake(ras, foco="electronics"):
         fig.add_annotation(
             x=prize.loc[foco, "revenue_en_juego"], y=foco,
             text="82% del premio total<br>se concentra aquí",
-            showarrow=True, arrowhead=2, arrowcolor=CRIT, ax=-90, ay=-30,
-            font=dict(color=CRIT, size=12), align="left",
+            showarrow=True, arrowhead=2, arrowcolor=BRAND_RED, ax=-90, ay=-30,
+            font=dict(color=BRAND_RED, size=12), align="left",
         )
     return fig
 
@@ -53,24 +68,22 @@ def hero_revenue_at_stake(ras, foco="electronics"):
 def hero_retention(rec):
     """Dos barras 100% apiladas: el 31,7% de compradores (recurrentes) = 69% del revenue."""
     pct_rep = rec["pct_repeat"]
-    pct_ot = 100 - pct_rep
     pct_rev_rep = rec["pct_rev_repeat"]
-    pct_rev_ot = 100 - pct_rev_rep
     x = ["Compradores", "Revenue"]
 
     fig = theme.base_fig()
     fig.add_bar(
         name="Recurrentes (≥2 compras)", x=x, y=[pct_rep, pct_rev_rep],
-        marker_color=CRIT,
+        marker_color=BRAND_RED,
         text=[fmt_pct(pct_rep), fmt_pct(pct_rev_rep)], textposition="inside",
         insidetextfont=dict(color="white", size=15),
         hovertemplate="Recurrentes: %{y:.1f}%<extra></extra>",
     )
     fig.add_bar(
-        name="One-time (1 compra)", x=x, y=[pct_ot, pct_rev_ot],
-        marker_color=GREY,
-        text=[fmt_pct(pct_ot), fmt_pct(pct_rev_ot)], textposition="inside",
-        insidetextfont=dict(color=MUTED, size=13),
+        name="One-time (1 compra)", x=x, y=[100 - pct_rep, 100 - pct_rev_rep],
+        marker_color=CTX,
+        text=[fmt_pct(100 - pct_rep), fmt_pct(100 - pct_rev_rep)], textposition="inside",
+        insidetextfont=dict(color="white", size=13),
         hovertemplate="One-time: %{y:.1f}%<extra></extra>",
     )
     fig.update_layout(
@@ -78,9 +91,10 @@ def hero_retention(rec):
         yaxis=dict(title="% del total", range=[0, 100], ticksuffix="%"),
         height=420, legend=dict(orientation="h", y=1.08, x=0),
     )
+    # flecha que conecta el mismo grupo de un eje al otro (recorrido visual, §3.4)
     fig.add_annotation(
         x=0, y=pct_rep / 2, ax=1, ay=pct_rev_rep / 2, xref="x", yref="y", axref="x", ayref="y",
-        text="", showarrow=True, arrowhead=2, arrowcolor=CRIT, arrowwidth=2,
+        text="", showarrow=True, arrowhead=2, arrowcolor=BRAND_RED, arrowwidth=2,
     )
     return fig
 
@@ -94,11 +108,11 @@ def funnel_chart(ab):
         y=["Vista", "Llega al carrito", "Compra"],
         x=[gf["n_units"], gf["reached_cart"], gf["reached_purchase"]],
         textinfo="value+percent initial",
-        marker_color=[GREY, ACCENT, CRIT],
+        marker_color=[CTX_BG, CTX, BRAND_RED],  # gradiente gris->rojo: la compra es lo que importa
         hovertemplate="%{y}: %{x:,} unidades<extra></extra>",
     ))
     fig.update_layout(
-        title=f"Funnel por unidad — solo el {fmt_pct(gf['conv_rate'],2)} de los productos vistos se compra",
+        title=f"Funnel por unidad — solo el {fmt_pct(gf['conv_rate'], 2)} de lo visto se compra",
         height=380, showlegend=False,
     )
     return fig
@@ -111,16 +125,18 @@ def abandonment_by_category(ab, foco=("electronics", "computers")):
     cats = list(aband_cat.index)
     vals = aband_cat["abandono"].tolist()
     vols = aband_cat["abandonados"].tolist()
-    colors = [CRIT if c in foco else GREY for c in cats]
+    colors = [BRAND_RED if c in foco else CTX_BG for c in cats]
 
     fig = theme.base_fig()
     fig.add_bar(
         x=vals, y=cats, orientation="h", marker_color=colors,
+        customdata=cats,
         text=[f"{fmt_int(v)} carritos" for v in vols], textposition="outside",
-        hovertemplate="%{y}: %{x:.1f}% abandono<extra></extra>",
+        textfont=dict(color=GRAY_600),
+        hovertemplate="%{customdata}: %{x:.1f}% abandono<extra></extra>",
     )
     g = ab["abandono_global"]
-    fig.add_vline(x=g, line_dash="dash", line_color=CRIT,
+    fig.add_vline(x=g, line_dash="dash", line_color=BRAND_RED,
                   annotation_text=f"Global {fmt_pct(g)}", annotation_position="top")
     fig.update_layout(
         title="Abandono de carrito por categoría (% que llega al carrito y no compra)",
@@ -132,12 +148,15 @@ def abandonment_by_category(ab, foco=("electronics", "computers")):
 
 # ── Marca dentro de electronics (PN1) ─────────────────────────────────────────
 def brand_chart(bm, top_n=8):
-    """Carritos por marca dentro de la categoría foco (abandonados vs comprados)."""
+    """Carritos por marca dentro de la categoría foco. Rojo = abandonados (lo que se pierde),
+    gris = comprados. SIN verde: un solo color semántico (§3.2)."""
     g = bm["g"].sort_values("carritos", ascending=False).head(top_n).iloc[::-1]
     fig = theme.base_fig()
-    fig.add_bar(name="Abandonados", x=g["abandonados"], y=g.index, orientation="h", marker_color=CRIT,
+    fig.add_bar(name="Abandonados", x=g["abandonados"], y=g.index, orientation="h",
+                marker_color=BRAND_RED,
                 hovertemplate="%{y}: %{x:,} abandonados<extra></extra>")
-    fig.add_bar(name="Comprados", x=g["comprados"], y=g.index, orientation="h", marker_color=GREEN,
+    fig.add_bar(name="Comprados", x=g["comprados"], y=g.index, orientation="h",
+                marker_color=CTX,
                 hovertemplate="%{y}: %{x:,} comprados<extra></extra>")
     fig.update_layout(
         barmode="stack",
@@ -154,10 +173,10 @@ def timing_chart(rt, cap_days=30):
     days = rt["days"]
     days = days[days <= cap_days]
     fig = theme.base_fig()
-    fig.add_histogram(x=days, nbinsx=30, marker_color=ACCENT,
+    fig.add_histogram(x=days, nbinsx=30, marker_color=CTX,
                       hovertemplate="%{x:.0f} días: %{y} usuarios<extra></extra>")
     med = rt["median_days"]
-    fig.add_vline(x=med, line_dash="dash", line_color=CRIT,
+    fig.add_vline(x=med, line_dash="dash", line_color=BRAND_RED,
                   annotation_text=f"Mediana {med:.1f} días".replace(".", ","),
                   annotation_position="top")
     fig.update_layout(
@@ -174,8 +193,9 @@ def ticket_chart(rec):
     fig = theme.base_fig()
     vals = [rec["ticket_one_time"], rec["ticket_repeat"]]
     fig.add_bar(
-        x=["One-time", "Recurrente"], y=vals, marker_color=[GREY, CRIT],
+        x=["One-time", "Recurrente"], y=vals, marker_color=[CTX, BRAND_RED],
         text=[fmt_money(v) for v in vals], textposition="outside",
+        textfont=dict(color=GRAY_600),
         hovertemplate="%{x}: %{y:$,.0f}<extra></extra>",
     )
     fig.update_layout(
@@ -195,16 +215,16 @@ def hourly_intensity_chart(hi):
         subplot_titles=("Distribución por hora (normalizada por tipo)",
                         "Intensidad: compras por 100 vistas"),
     )
-    # Panel izq: distribución normalizada
-    fig.add_scatter(x=horas, y=hi["%_vistas"], name="Vistas", line=dict(color=GREY, width=2),
+    # Panel izq: vistas y carritos como contexto (grises), compras en rojo (lo que importa)
+    fig.add_scatter(x=horas, y=hi["%_vistas"], name="Vistas", line=dict(color=CTX_BG, width=2),
                     mode="lines+markers", row=1, col=1)
-    fig.add_scatter(x=horas, y=hi["%_carritos"], name="Carritos", line=dict(color=ACCENT, width=2),
+    fig.add_scatter(x=horas, y=hi["%_carritos"], name="Carritos", line=dict(color=CTX, width=2),
                     mode="lines+markers", row=1, col=1)
-    fig.add_scatter(x=horas, y=hi["%_compras"], name="Compras", line=dict(color=CRIT, width=3),
+    fig.add_scatter(x=horas, y=hi["%_compras"], name="Compras", line=dict(color=BRAND_RED, width=3),
                     mode="lines+markers", row=1, col=1)
-    # Panel der: intensidad
+    # Panel der: intensidad, pico en rojo
     peak_h = int(hi["compras_x100_vistas"].idxmax())
-    bar_colors = [CRIT if h == peak_h else GREY for h in horas]
+    bar_colors = [BRAND_RED if h == peak_h else CTX_BG for h in horas]
     fig.add_bar(x=horas, y=hi["compras_x100_vistas"], marker_color=bar_colors, showlegend=False,
                 hovertemplate="%{x}h: %{y:.2f} compras/100 vistas<extra></extra>", row=1, col=2)
 
@@ -226,10 +246,10 @@ def decision_speed_chart(ds, cap_min=30):
     dt = ds["decision_time"]
     dt = dt[dt <= cap_min]
     fig = theme.base_fig()
-    fig.add_histogram(x=dt, nbinsx=30, marker_color=ACCENT,
+    fig.add_histogram(x=dt, nbinsx=30, marker_color=CTX,
                       hovertemplate="%{x:.0f} min: %{y} unidades<extra></extra>")
     med = ds["median_min"]
-    fig.add_vline(x=med, line_dash="dash", line_color=CRIT,
+    fig.add_vline(x=med, line_dash="dash", line_color=BRAND_RED,
                   annotation_text=f"Mediana {med:.1f} min".replace(".", ","),
                   annotation_position="top")
     fig.update_layout(
@@ -244,13 +264,13 @@ def decision_speed_chart(ds, cap_min=30):
 def price_vs_conversion_chart(pc, foco="electronics"):
     """Scatter precio mediana por categoría vs conversión; el precio no es el freno."""
     cats = list(pc.index)
-    colors = [CRIT if c == foco else GREY for c in cats]
+    colors = [BRAND_RED if c == foco else CTX for c in cats]
     fig = theme.base_fig()
     fig.add_scatter(
         x=pc["precio_mediana"], y=pc["conv_rate"], mode="markers+text",
-        text=cats, textposition="top center", textfont=dict(size=11, color=MUTED),
-        marker=dict(size=12, color=colors),
-        hovertemplate="%{text}<br>precio mediana %{x:$,.0f}<br>conv %{y:.2f}%<extra></extra>",
+        text=cats, textposition="top center", textfont=dict(size=11, color=GRAY_600),
+        marker=dict(size=12, color=colors), customdata=cats,
+        hovertemplate="%{customdata}<br>precio mediana %{x:$,.0f}<br>conv %{y:.2f}%<extra></extra>",
     )
     fig.update_layout(
         title="El precio no es el freno: las categorías baratas convierten peor, no mejor",
